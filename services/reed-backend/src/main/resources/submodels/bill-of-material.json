@@ -1,0 +1,9 @@
+{
+  "assetClass": "BillOfMaterial",
+  "parentPart": "urn:reed:part:bulky-frame-XL-001",
+  "items": [
+    { "childPart": "urn:reed:part:cross-beam-A", "qty": 2, "supplierBpn": "BPN-REED-SUP-0002" },
+    { "childPart": "urn:reed:part:mount-bracket-B", "qty": 8, "supplierBpn": "BPN-REED-SUP-0002" },
+    { "childPart": "urn:reed:part:weld-kit-C", "qty": 1, "supplierBpn": "BPN-REED-SUP-0002" }
+  ]
+}

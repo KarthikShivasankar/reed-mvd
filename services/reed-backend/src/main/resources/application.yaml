@@ -1,0 +1,22 @@
+server:
+  port: 8080
+
+spring:
+  datasource:
+    url: ${REED_DB_URL:jdbc:postgresql://postgres:5432/reed}
+    username: ${REED_DB_USER:reed}
+    password: ${REED_DB_PASSWORD:reed}
+  jpa:
+    hibernate:
+      # Additive: REED tables are created/updated on startup, never dropped.
+      ddl-auto: update
+    properties:
+      hibernate:
+        format_sql: false
+    open-in-view: false
+
+reed:
+  # Static key the EDC data-plane proxy presents (authCode) to pull submodel payloads.
+  api-key: ${REED_API_KEY:reed-submodel-key}
+  # The provider BPN that owns the seeded assets (the OEM running this backend).
+  owner-bpn: ${REED_OWNER_BPN:BPN-REED-OEM-0001}

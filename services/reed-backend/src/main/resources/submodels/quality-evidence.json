@@ -1,0 +1,10 @@
+{
+  "assetClass": "QualityEvidence",
+  "part": "urn:reed:part:bulky-frame-XL-001",
+  "inspectionReports": [
+    { "id": "QIR-2026-0312", "method": "CMM", "result": "pass", "date": "2026-05-28" },
+    { "id": "QIR-2026-0313", "method": "ultrasonic weld", "result": "pass", "date": "2026-05-29" }
+  ],
+  "certificates": ["EN 1090-2 EXC3", "ISO 3834-2"],
+  "nonConformances": []
+}

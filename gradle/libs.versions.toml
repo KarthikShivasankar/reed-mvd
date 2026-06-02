@@ -1,0 +1,30 @@
+[metadata]
+format.version = "1.1"
+
+[versions]
+edc = "0.17.0"
+springBoot = "3.3.5"
+postgresql = "42.7.4"
+
+[libraries]
+# BOMs - each pulls in everything needed for its runtime role
+edc-bom-controlplane-base     = { module = "org.eclipse.edc:controlplane-base-bom", version.ref = "edc" }
+edc-bom-dataplane-base        = { module = "org.eclipse.edc:dataplane-base-bom", version.ref = "edc" }
+edc-bom-federatedcatalog-base = { module = "org.eclipse.edc:federatedcatalog-base-bom", version.ref = "edc" }
+
+# Overlays added on top of the BOMs
+edc-edr-cache-api   = { module = "org.eclipse.edc:edr-cache-api", version.ref = "edc" }
+edc-iam-mock        = { module = "org.eclipse.edc:iam-mock", version.ref = "edc" }
+edc-vault-hashicorp = { module = "org.eclipse.edc:vault-hashicorp", version.ref = "edc" }
+
+# For the static-node-directory extension
+edc-crawler-spi       = { module = "org.eclipse.edc:crawler-spi", version.ref = "edc" }
+edc-runtime-metamodel = { module = "org.eclipse.edc:runtime-metamodel", version.ref = "edc" }
+
+# REED backend (Spring Boot + Postgres)
+postgresql = { module = "org.postgresql:postgresql", version.ref = "postgresql" }
+
+[plugins]
+shadow      = { id = "com.gradleup.shadow", version = "9.1.0" }
+spring-boot = { id = "org.springframework.boot", version.ref = "springBoot" }
+spring-dependency-management = { id = "io.spring.dependency-management", version = "1.1.6" }

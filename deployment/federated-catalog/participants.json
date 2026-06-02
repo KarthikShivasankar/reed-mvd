@@ -1,0 +1,14 @@
+[
+  {
+    "name": "reed-provider",
+    "id": "reed-provider",
+    "url": "http://reed-provider:19194/protocol/2025-1",
+    "supportedProtocols": ["dataspace-protocol-http:2025-1"]
+  },
+  {
+    "name": "consumer-1",
+    "id": "consumer-1",
+    "url": "http://consumer-1:29194/protocol/2025-1",
+    "supportedProtocols": ["dataspace-protocol-http:2025-1"]
+  }
+]

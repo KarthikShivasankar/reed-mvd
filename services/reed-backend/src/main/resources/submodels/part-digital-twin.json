@@ -1,0 +1,11 @@
+{
+  "assetClass": "PartDigitalTwin",
+  "globalAssetId": "urn:reed:part:bulky-frame-XL-001",
+  "ownerBpn": "BPN-REED-OEM-0001",
+  "partType": "serialized",
+  "name": "Bulky welded chassis frame XL",
+  "lifecycleState": "in-production",
+  "dimensionsMm": { "length": 4200, "width": 1800, "height": 1100 },
+  "massKg": 860,
+  "serialNumbers": ["FRM-XL-2026-0001", "FRM-XL-2026-0002"]
+}

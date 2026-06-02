@@ -1,0 +1,10 @@
+{
+  "assetClass": "ProcessCapability",
+  "machine": "Gantry welding cell GW-12",
+  "envelopeMm": { "length": 6000, "width": 2500, "height": 2000 },
+  "maxWorkpieceMassKg": 2000,
+  "operations": ["MIG welding", "robotic grinding", "CMM inspection"],
+  "tolerances": { "flatnessMm": 0.4, "positionMm": 0.2 },
+  "leadTimeDays": 14,
+  "cpk": 1.67
+}

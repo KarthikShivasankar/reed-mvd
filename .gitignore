@@ -1,0 +1,75 @@
+# IDE / Editor
+.idea/
+.vscode/
+*.iml
+*.swp
+*.swo
+*~
+.classpath
+.project
+.settings/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker / Compose
+docker-compose.override.yml
+docker-compose.*.override.yml
+
+# Logs
+*.log
+logs/
+*.out
+*.err
+
+# Data
+data/
+*.db
+*.sqlite
+
+# Secrets (should be externalized in production)
+secrets/
+*.key
+*.pem
+*.p12
+*.jks
+
+# Java / Gradle build artifacts
+target/
+build/
+dist/
+out/
+bin/
+*.jar
+*.war
+*.ear
+*.class
+hs_err_pid*
+replay_pid*
+
+# Gradle
+.gradle/
+gradle-app.setting
+!gradle-wrapper.jar
+.gradletasknamecache
+
+# Environment
+.env
+.env.local
+.env.*.local
+.envrc
+.direnv/
+
+# Keycloak data
+keycloak-data/
+
+# Test / coverage
+test-results/
+reports/
+coverage/
+*.exec
+
+# EDC runtime / local vault runtime data
+edc-runtime/
+vault/

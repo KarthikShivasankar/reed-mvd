@@ -1,0 +1,9 @@
+{
+  "assetClass": "ProductionStatus",
+  "part": "urn:reed:part:bulky-frame-XL-001",
+  "openCapacityUnitsPerWeek": 12,
+  "orderBacklog": 47,
+  "qualityGates": { "incoming": "pass", "inProcess": "pass", "final": "pending" },
+  "nextDeliveryDate": "2026-06-19",
+  "onTimeDeliveryPercent": 94
+}

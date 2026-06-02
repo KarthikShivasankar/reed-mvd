@@ -1,0 +1,171 @@
+name: mvd
+
+services:
+  # ---------- HashiCorp Vault (dev mode) ----------
+  vault:
+    image: hashicorp/vault:1.17
+    container_name: mvd-vault
+    cap_add:
+      - IPC_LOCK
+    environment:
+      VAULT_DEV_ROOT_TOKEN_ID: root
+      VAULT_DEV_LISTEN_ADDRESS: 0.0.0.0:8200
+    ports:
+      - "8200:8200"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8200/v1/sys/health"]
+      interval: 2s
+      retries: 30
+
+  # Sidecar that seeds the demo secrets into the dev vault
+  init-vault:
+    image: hashicorp/vault:1.17
+    container_name: mvd-init-vault
+    depends_on:
+      vault:
+        condition: service_healthy
+    environment:
+      VAULT_ADDR: http://vault:8200
+      VAULT_TOKEN: root
+    volumes:
+      - ./vault/keys:/keys:ro
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -eu
+        vault kv put secret/reed-provider-signing-key       content=@/keys/reed-provider-signing-key.pem
+        vault kv put secret/reed-provider-verification-key   content=@/keys/reed-provider-verification-key.pem
+        vault kv put secret/consumer-1-signing-key           content=@/keys/consumer-1-signing-key.pem
+        vault kv put secret/consumer-1-verification-key      content=@/keys/consumer-1-verification-key.pem
+        echo "Vault seeded."
+
+  # ---------- Postgres (REED backend store) ----------
+  postgres:
+    image: postgres:16-alpine
+    container_name: mvd-postgres
+    environment:
+      POSTGRES_DB: reed
+      POSTGRES_USER: reed
+      POSTGRES_PASSWORD: reed
+    volumes:
+      - reed-pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U reed -d reed"]
+      interval: 2s
+      retries: 30
+
+  # ---------- REED backend ----------
+  # Spring Boot service: source of truth for the REED data model (5 tables,
+  # classification matrix, policy templates), the submodel service holding the
+  # confidential payloads, and the EDC-render API the seed step consumes.
+  reed-backend:
+    build:
+      context: ../services/reed-backend
+      dockerfile: Dockerfile
+    container_name: mvd-reed-backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      REED_DB_URL: jdbc:postgresql://postgres:5432/reed
+      REED_DB_USER: reed
+      REED_DB_PASSWORD: reed
+      REED_API_KEY: reed-submodel-key
+      REED_OWNER_BPN: BPN-REED-OEM-0001
+    ports:
+      - "8081:8080"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/reed/classifications"]
+      interval: 5s
+      retries: 30
+
+  # ---------- REED Provider (the OEM) ----------
+  reed-provider:
+    build:
+      context: ../launchers/connector
+      dockerfile: Dockerfile
+    container_name: mvd-reed-provider
+    depends_on:
+      init-vault:
+        condition: service_completed_successfully
+      reed-backend:
+        condition: service_started
+    volumes:
+      - ./reed-provider/config.properties:/app/config/config.properties:ro
+    ports:
+      - "19191:19191"
+      - "19192:19192"
+      - "19193:19193"
+      - "19194:19194"
+      - "19195:19195"
+      - "19291:19291"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:19193/management/v3/assets/request", "--post-data=", "--header=Content-Type:application/json", "--header=X-Api-Key:mvd-demo"]
+      interval: 5s
+      retries: 30
+
+  # ---------- Consumer-1 ----------
+  consumer-1:
+    build:
+      context: ../launchers/connector
+      dockerfile: Dockerfile
+    container_name: mvd-consumer-1
+    depends_on:
+      init-vault:
+        condition: service_completed_successfully
+    volumes:
+      - ./consumer-1/config.properties:/app/config/config.properties:ro
+    ports:
+      - "29191:29191"
+      - "29192:29192"
+      - "29193:29193"
+      - "29194:29194"
+      - "29195:29195"
+      - "29291:29291"
+
+  # ---------- REED Dashboard ----------
+  # Modern React (Vite + TypeScript) SPA, built fast and served by nginx.
+  # It is a browser-side app: API calls go from your browser to localhost:8081
+  # (REED backend), :19193 / :29193 (connectors) and :39193 (federated catalog),
+  # NOT through the container network. Endpoints are read at runtime from
+  # /config.json (bind-mounted below), so they can change without a rebuild.
+  dashboard:
+    build:
+      context: ../services/reed-dashboard
+      dockerfile: Dockerfile
+    container_name: mvd-reed-dashboard
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./dashboard/config.json:/usr/share/nginx/html/config.json:ro
+    depends_on:
+      - reed-backend
+      - reed-provider
+      - consumer-1
+      - federated-catalog
+
+  # ---------- Federated Catalog ----------
+  federated-catalog:
+    build:
+      context: ../launchers/federated-catalog
+      dockerfile: Dockerfile
+    container_name: mvd-federated-catalog
+    depends_on:
+      reed-provider:
+        condition: service_started
+      consumer-1:
+        condition: service_started
+    volumes:
+      - ./federated-catalog/config.properties:/app/config/config.properties:ro
+      - ./federated-catalog/participants.json:/app/config/participants.json:ro
+    ports:
+      - "39191:39191"
+      - "39192:39192"
+      - "39193:39193"
+      - "39194:39194"
+      - "39195:39195"
+
+volumes:
+  reed-pgdata:

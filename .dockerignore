@@ -1,0 +1,35 @@
+# Git
+.git/
+.gitignore
+
+# Build artifacts
+.gradle/
+build/
+target/
+*.jar
+*.war
+
+# IDE
+.idea/
+.vscode/
+*.iml
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Documentation
+README.md
+OAUTH2-SETUP.md
+*.md
+
+# Config files (will be mounted as volumes)
+provider/
+consumer/
+config/
+
+# Docker
+docker-compose.yml
+docker-compose.override.yml
+.dockerignore

@@ -1,0 +1,9 @@
+{
+  "assetClass": "FixtureHandlingStrategy",
+  "part": "urn:reed:part:bulky-frame-XL-001",
+  "fixtureId": "FIX-XL-07",
+  "liftingPoints": 4,
+  "centerOfGravityMm": { "x": 2100, "y": 900, "z": 480 },
+  "handlingConstraints": ["max tilt 15deg", "spreader bar required", "two-crane lift above 600kg"],
+  "setupTimeMin": 35
+}

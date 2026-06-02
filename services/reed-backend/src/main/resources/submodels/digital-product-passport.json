@@ -1,0 +1,12 @@
+{
+  "assetClass": "DigitalProductPassport",
+  "part": "urn:reed:part:bulky-frame-XL-001",
+  "materials": [
+    { "name": "S355 structural steel", "massFraction": 0.94, "recyclable": true },
+    { "name": "zinc coating", "massFraction": 0.04, "recyclable": true },
+    { "name": "paint", "massFraction": 0.02, "recyclable": false }
+  ],
+  "carbonFootprintKgCo2e": 1820,
+  "recyclabilityPercent": 96,
+  "compliance": ["REACH", "RoHS", "EU-DPP-2027"]
+}
