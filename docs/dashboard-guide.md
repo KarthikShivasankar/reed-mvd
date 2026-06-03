@@ -46,11 +46,17 @@ REED governs access at three points, not one:
 
 ## 2. The dashboard, tab by tab
 
-Open **http://localhost:8080**.
+Open **http://localhost:8080**. Every tab has a collapsible **"What this view is for &
+how it's used"** explainer at the top (role · what's here · how it fits the process), and
+the nav is grouped **Start · Reference · numbered Workflow ①–④**.
 
-- **Overview** — headline counts (asset classes, policy templates, audit events,
-  payload pulls), the sovereign-sharing flow, and a live status check of the
-  backend/connectors/FC. Start here to confirm everything is up.
+- **Overview** — headline counts plus the **interactive topology diagram**: both
+  connectors (control plane + data plane), the federated catalog and the REED backend,
+  with the six stages animated. Press **▶** to walk the flow, or pick a **REED use-case
+  scenario** (or **build your own** from any BPN + asset) and **run it live** — the diagram
+  lights up each real control-plane/data-plane hop, ending in the confidential payload or a
+  catalogue-layer denial. Also: a **Connectors, endpoints & protocols** reference, a guided
+  path, and a live status check. Start here.
 - **Matrix** — the seeded classification matrix: each of the 8 asset classes with
   its **sensitivity** (consortium → confidential → restricted → regulated, colour
   coded) and **discoverability**, and the **policy template** applied.
@@ -60,6 +66,8 @@ Open **http://localhost:8080**.
   assets appear and disappear. Each query is itself audited (a `DISCOVER` event).
 - **Negotiate** — the interactive workflow (see §3). Pick an offered asset and
   click **negotiate & pull** to run a real contract negotiation from the browser.
+  The same topology diagram from Overview sits at the top here and is driven **live**,
+  lighting up each stage (discover → negotiate → transfer → EDR → pull) as it happens.
 - **Policies** — the six policy templates and the **faithful ODRL** REED renders
   for each (permissions, prohibitions like *no redistribution*, obligations like
   *audit*, and constraints like a pilot expiry date).
@@ -161,3 +169,17 @@ curl -s  http://localhost:8081/reed/audit | jq                              # au
   edit it and hard-refresh to point the dashboard elsewhere; no rebuild.
 - The browser can call the connectors and the data-plane proxy because CORS is
   enabled on the connectors and the REED backend.
+
+---
+
+## 6. Going deeper
+
+- **`services/reed-dashboard/README.md`** — the six stages in a table (with the wire
+  calls and policy layer behind each), the role/content/usage of every tab, and how to
+  author new scenarios (`SCENARIOS` in `src/diagram.tsx`).
+- **`docs/connectors-and-protocols.md`** — the network reference: containers, port
+  convention, every endpoint, the protocols (DSP, Management API, Data Plane
+  Signaling/Public, Vault, iam-mock, JDBC), and the connector↔connector communication
+  matrix. Mirrored in the dashboard's **Connectors, endpoints & protocols** panel.
+- **`docs/reed-data-model.md`** — the 5 REED tables, the 8 asset classes, the
+  classification matrix and the three-layer policy model.

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import type { AppConfig } from "./config";
-import { Api, AuditEvent, Classification, flattenDatasets, offerIdFor, prop, val } from "./api";
+import { Api, AuditEvent, Classification, flattenDatasets, prop, runReedFlow } from "./api";
 import {
   DiscoverabilityChip,
   Json,
@@ -11,18 +11,21 @@ import {
   SensitivityChip,
   TemplateChip,
 } from "./ui";
+import { GuidedPath, SCENARIOS, Scenario, StepId, Topology } from "./diagram";
+import { Explainer, NetworkReference, TAB_HELP } from "./guide";
 
 type View = "overview" | "matrix" | "catalogue" | "negotiate" | "policies" | "edc" | "transfers" | "audit";
 
-const VIEWS: { id: View; label: string }[] = [
-  { id: "overview", label: "Overview" },
-  { id: "matrix", label: "Matrix" },
-  { id: "catalogue", label: "Catalogue" },
-  { id: "negotiate", label: "Negotiate" },
-  { id: "policies", label: "Policies" },
-  { id: "edc", label: "EDC Catalog" },
-  { id: "transfers", label: "Transfers" },
-  { id: "audit", label: "Audit" },
+type Group = "start" | "model" | "flow";
+const VIEWS: { id: View; label: string; group: Group; step?: number }[] = [
+  { id: "overview", label: "Overview", group: "start" },
+  { id: "matrix", label: "Matrix", group: "model" },
+  { id: "policies", label: "Policies", group: "model" },
+  { id: "edc", label: "EDC Catalog", group: "model" },
+  { id: "catalogue", label: "Catalogue", group: "flow", step: 1 },
+  { id: "negotiate", label: "Negotiate", group: "flow", step: 2 },
+  { id: "transfers", label: "Transfers", group: "flow", step: 3 },
+  { id: "audit", label: "Audit", group: "flow", step: 4 },
 ];
 
 /* generic fetch hook */
@@ -63,11 +66,18 @@ export function App({ config }: { config: AppConfig }) {
           <span className="sub">Manufacturing Data Space · Control Surface</span>
         </div>
         <nav className="nav">
-          {VIEWS.map((v) => (
-            <button key={v.id} className={view === v.id ? "active" : ""} onClick={() => setView(v.id)}>
-              {v.label}
-            </button>
-          ))}
+          {VIEWS.map((v, i) => {
+            const newGroup = i > 0 && VIEWS[i - 1].group !== v.group;
+            return (
+              <span key={v.id} style={{ display: "contents" }}>
+                {newGroup && <span className="nav-sep" aria-hidden />}
+                <button className={view === v.id ? "active" : ""} onClick={() => setView(v.id)} title={v.group === "flow" ? `Workflow step ${v.step}` : undefined}>
+                  {v.step && <span className="nav-step">{v.step}</span>}
+                  {v.label}
+                </button>
+              </span>
+            );
+          })}
         </nav>
       </header>
 
@@ -107,6 +117,70 @@ function Overview({ api, config, onJump }: { api: Api; config: AppConfig; onJump
   }, [config.reedBackendUrl]);
 
   const pulls = audit.data?.filter((a) => a.eventType === "PULL").length ?? 0;
+  const [scenario, setScenario] = useState<Scenario>(SCENARIOS[0]);
+
+  /* live scenario runner — exercises the real REED + connector flow */
+  const [running, setRunning] = useState(false);
+  const [stage, setStage] = useState(-1);
+  const [slog, setSlog] = useState<string[]>([]);
+  const [payload, setPayload] = useState<string | null>(null);
+  const [denied, setDenied] = useState(false);
+  const [serr, setSerr] = useState<string | null>(null);
+
+  /* custom scenario builder inputs */
+  const assetIds = useMemo(() => (cls.data ?? []).map((c) => `${kebab(c.assetClass)}-001`), [cls.data]);
+  const [cBpn, setCBpn] = useState(config.bpns[0]?.bpn ?? "");
+  const [cBpnText, setCBpnText] = useState("");
+  const [cAsset, setCAsset] = useState("");
+  useEffect(() => { if (!cAsset && assetIds.length) setCAsset(assetIds[0]); }, [assetIds, cAsset]);
+
+  const resetRun = useCallback(() => { setRunning(false); setStage(-1); setSlog([]); setPayload(null); setDenied(false); setSerr(null); }, []);
+  const pick = (s: Scenario) => { resetRun(); setScenario(s); };
+  const slogAdd = (m: string) => setSlog((l) => [...l, m]);
+
+  async function runScenario(s: Scenario) {
+    resetRun(); setScenario(s); setRunning(true); setStage(0);
+    try {
+      // 1. catalogue layer — does this BPN even see the asset? (real REED check)
+      slogAdd(`◆ DISCOVER as ${s.consumerBpn}`);
+      const visible = await api.catalogue(s.consumerBpn);
+      const found = visible.find((a) => a.assetId === s.asset);
+      if (!found) {
+        slogAdd(`✕ ${s.asset} not discoverable — catalogue layer blocks ${s.consumerBpn}`);
+        setDenied(true); setStage(0); setRunning(false);
+        audit.reload();
+        return;
+      }
+      slogAdd(`◆ discoverable · ${found.sensitivity} · ${found.policyTemplate}`);
+      // 2..6 full contract → EDR → pull (real connector flow)
+      const data = await runReedFlow(api, s.asset, { onStage: setStage, onLog: slogAdd });
+      setPayload(data);
+      audit.reload();
+    } catch (e: any) {
+      setSerr(String(e.message ?? e));
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  function runCustom() {
+    const bpn = (cBpnText.trim() || cBpn).trim();
+    if (!bpn || !cAsset) return;
+    const meta = cls.data?.find((c) => `${kebab(c.assetClass)}-001` === cAsset);
+    const label = config.bpns.find((b) => b.bpn === bpn)?.label ?? "Custom partner";
+    runScenario({
+      id: "custom",
+      label: "Custom scenario",
+      consumer: label,
+      consumerBpn: bpn,
+      asset: cAsset,
+      sensitivity: meta?.sensitivity ?? "confidential",
+      outcome: "granted",
+      story: `Custom REED scenario: does ${label} (${bpn}) get ${cAsset}? The catalogue layer decides discoverability, then the contract + data plane decide the rest.`,
+    });
+  }
+
+  const consumerLabel = `CONSUMER · ${scenario.consumer} · ${scenario.consumerBpn}`;
 
   return (
     <>
@@ -115,6 +189,7 @@ function Overview({ api, config, onJump }: { api: Api; config: AppConfig; onJump
         title="Overview"
         desc="A partner discovers that data exists without receiving the confidential payload — until a contract is accepted, and every access is audited."
       />
+      <Explainer help={TAB_HELP.overview} />
       <div className="stat-grid">
         <Stat label="Asset classes" value={cls.data?.length ?? "—"} />
         <Stat label="Policy templates" value={tpl.data?.length ?? "—"} tone="cyan" />
@@ -122,26 +197,117 @@ function Overview({ api, config, onJump }: { api: Api; config: AppConfig; onJump
         <Stat label="Payload pulls" value={pulls} unit="EDR-gated" />
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-        <Panel title="Sovereign sharing flow">
-          <div className="flowbar">
-            <span className="step done">classify</span>
-            <span className="arrow">→</span>
-            <span className="step done">publish metadata</span>
-            <span className="arrow">→</span>
-            <span className="step active">discover</span>
-            <span className="arrow">→</span>
-            <span className="step">negotiate</span>
-            <span className="arrow">→</span>
-            <span className="step">EDR</span>
-            <span className="arrow">→</span>
-            <span className="step">pull payload</span>
+      <Panel title="Dataspace topology & sovereign sharing flow" right={<span className="mono faint" style={{ fontSize: 10.5 }}>control plane ⇄ data plane · supplier ⇄ OEM</span>}>
+        <div className="scenario-bar">
+          <span className="scenario-label">REED use case</span>
+          <div className="seg">
+            {SCENARIOS.map((s) => (
+              <button key={s.id} className={scenario.id === s.id ? "active" : ""} onClick={() => pick(s)} title={s.label} disabled={running}>
+                {s.label}
+              </button>
+            ))}
           </div>
-          <p className="muted" style={{ marginTop: 14, fontSize: 12.5 }}>
-            Only metadata reaches the EDC catalogue. The confidential payload stays in the
-            REED submodel service and is reachable only through an EDR issued after a
-            contract reaches <span className="mono" style={{ color: "var(--cyan)" }}>FINALIZED</span>.
-          </p>
+          {scenario.id !== "custom" && (
+            <span className={`scenario-outcome ${scenario.outcome}`}>{scenario.outcome === "granted" ? "expects: granted" : "expects: denied"}</span>
+          )}
+        </div>
+        <div className="scenario-story">
+          <b>{scenario.consumer}</b> wants <span className="mono">{scenario.asset}</span> (<SensitivityChip value={scenario.sensitivity} />). {scenario.story}
+        </div>
+
+        <div className="scenario-run">
+          <button className="btn" onClick={() => runScenario(scenario)} disabled={running || scenario.id === "custom"}>
+            {running && scenario.id !== "custom" ? "running…" : "▶ run this scenario live"}
+          </button>
+          {(slog.length > 0 || serr) && <button className="btn ghost" onClick={resetRun} disabled={running}>reset</button>}
+          <span className="mono faint" style={{ fontSize: 10.5 }}>
+            real flow against {config.provider.id} · the diagram below tracks it live
+          </span>
+        </div>
+
+        <details className="custom-builder">
+          <summary><span className="cb-plus">＋</span> Build your own REED scenario<span className="ex-caret">▾</span></summary>
+          <div className="custom-builder-body">
+            <p className="muted" style={{ fontSize: 12.5, margin: "0 0 12px" }}>
+              Pick any partner identity (BPN) and any asset, then run it for real. The catalogue layer decides whether that partner can even discover it — so this is also how you demonstrate a <b>denial</b>.
+            </p>
+            <div className="cb-row">
+              <label className="cb-field">
+                <span>Consumer BPN</span>
+                <select className="field" value={cBpn} onChange={(e) => setCBpn(e.target.value)} disabled={running}>
+                  {config.bpns.map((b) => <option key={b.bpn} value={b.bpn}>{b.label} · {b.bpn}</option>)}
+                </select>
+              </label>
+              <label className="cb-field">
+                <span>…or custom BPN</span>
+                <input className="field" placeholder="BPN-…" value={cBpnText} onChange={(e) => setCBpnText(e.target.value)} disabled={running} />
+              </label>
+              <label className="cb-field">
+                <span>Asset</span>
+                <select className="field" value={cAsset} onChange={(e) => setCAsset(e.target.value)} disabled={running}>
+                  {assetIds.map((a) => <option key={a} value={a}>{a}</option>)}
+                </select>
+              </label>
+              <button className="btn" style={{ alignSelf: "flex-end" }} onClick={runCustom} disabled={running}>
+                {running && scenario.id === "custom" ? "running…" : "▶ run custom"}
+              </button>
+            </div>
+            <div className="cb-examples">
+              <span className="cb-ex-label">examples</span>
+              {[
+                { bpn: "BPN-REED-SUP-0002", asset: "process-capability-001", note: "supplier → confidential, granted" },
+                { bpn: "BPN-REED-SUP-0002", asset: "digital-product-passport-001", note: "any member → consortium, granted" },
+                { bpn: "BPN-REED-SIM-0003", asset: "production-status-001", note: "project partner → restricted, granted" },
+                { bpn: "BPN-REED-OUT-9999", asset: "quality-evidence-001", note: "outsider → regulated, DENIED" },
+                { bpn: "BPN-REED-SIM-0003", asset: "process-capability-001", note: "wrong relation → DENIED" },
+              ].map((ex) => (
+                <button key={ex.bpn + ex.asset} className="cb-ex" disabled={running} onClick={() => { setCBpnText(""); setCBpn(ex.bpn); setCAsset(ex.asset); }} title={`load ${ex.bpn} + ${ex.asset}`}>
+                  <span className="mono">{ex.bpn.replace("BPN-REED-", "")}</span> + <span className="mono">{ex.asset}</span>
+                  <span className="cb-ex-note">{ex.note}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </details>
+
+        <Topology key={scenario.id} active={running || denied || payload ? stageToStep(stage) : undefined} interactive={!(running || denied || payload)} consumerLabel={consumerLabel} />
+
+        {(slog.length > 0 || serr) && (
+          <div className="scenario-result">
+            {serr && <div className="error" style={{ marginBottom: 8 }}>✕ {serr}</div>}
+            {denied && (
+              <div className="denied-banner">
+                access denied at the <b>catalogue layer</b> — {scenario.consumerBpn} has no supply-chain relation that makes <span className="mono">{scenario.asset}</span> discoverable. No offer → no contract → no payload.
+              </div>
+            )}
+            <div className="mono" style={{ fontSize: 11.5, lineHeight: 1.9, color: "var(--text-dim)" }}>
+              {slog.map((l, i) => <div key={i}>{l}</div>)}
+            </div>
+            {payload && (
+              <>
+                <div className="panel-head" style={{ margin: "12px -14px 8px", paddingLeft: 14 }}>confidential payload · post-contract</div>
+                <Json value={safeParse(payload)} />
+              </>
+            )}
+          </div>
+        )}
+      </Panel>
+
+      <div style={{ marginTop: 14 }}>
+        <NetworkReference />
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 14, marginTop: 14 }}>
+        <Panel title="Where to start · the workflow">
+          <GuidedPath
+            onJump={onJump}
+            items={[
+              { n: 1, title: "Catalogue — discover by BPN", desc: "See exactly what a partner is allowed to find. The catalogue layer in action.", to: "catalogue" },
+              { n: 2, title: "Negotiate — contract → EDR → pull", desc: "Run the full flow live and watch this diagram light up step by step.", to: "negotiate" },
+              { n: 3, title: "Transfers — contract states", desc: "Confirm the negotiation FINALIZED and the transfer STARTED on the connector.", to: "transfers" },
+              { n: 4, title: "Audit — the access trail", desc: "Every discover / negotiate / pull is logged. The accountability record.", to: "audit" },
+            ]}
+          />
         </Panel>
 
         <Panel title="System status">
@@ -189,6 +355,7 @@ function Matrix({ api }: { api: Api }) {
   return (
     <>
       <SectionHead idx="01 /" title="Classification Matrix" desc="Eight asset classes, each with a sensitivity, a discoverability scope, and a default policy template." />
+      <Explainer help={TAB_HELP.matrix} />
       <Panel title="reed_asset_classification">
         {loading && <div className="empty">loading…</div>}
         {error && <div className="error">backend unreachable — {error}</div>}
@@ -231,6 +398,7 @@ function Catalogue({ api, config }: { api: Api; config: AppConfig }) {
   return (
     <>
       <SectionHead idx="02 /" title="Catalogue · Discoverability" desc="The catalogue layer: what a given partner BPN is allowed to see. Bilateral/project assets stay hidden without a supply-chain relation." />
+      <Explainer help={TAB_HELP.catalogue} />
       <div className="controls">
         <div className="seg">
           {config.bpns.map((b) => (
@@ -279,6 +447,7 @@ function Policies({ api }: { api: Api }) {
   return (
     <>
       <SectionHead idx="03 /" title="Policy Templates" desc="The faithful ODRL REED renders per asset. Under iam-mock the connector policy is permissive; these constraints are what DCP/IdentityHub would enforce." />
+      <Explainer help={TAB_HELP.policies} />
       {loading && <div className="empty">loading…</div>}
       {error && <div className="error">backend unreachable — {error}</div>}
       {data && (
@@ -307,6 +476,7 @@ function EdcCatalog({ api }: { api: Api }) {
   return (
     <>
       <SectionHead idx="04 /" title="EDC · Federated Catalog" desc="Live datasets aggregated by the federated catalog crawler. This is the EDC view — metadata only, no payload." />
+      <Explainer help={TAB_HELP.edc} />
       <Panel title="POST /management/v3/catalogs/request" right={<button className="btn ghost" onClick={reload}>refresh</button>}>
         {loading && <div className="empty">crawling…</div>}
         {error && <div className="error">federated catalog unreachable — {error}</div>}
@@ -341,6 +511,7 @@ function Transfers({ api, config }: { api: Api; config: AppConfig }) {
   return (
     <>
       <SectionHead idx="05 /" title="Contracts & Transfers" desc={`Negotiations and transfer processes recorded by ${consumer.name}.`} />
+      <Explainer help={TAB_HELP.transfers} />
       <div style={{ display: "grid", gap: 14 }}>
         <Panel title="contract negotiations" right={<button className="btn ghost" onClick={negs.reload}>refresh</button>}>
           <StateList rows={negs.data} error={negs.error} loading={negs.loading} idKey="@id" />
@@ -402,6 +573,7 @@ function Audit({ api }: { api: Api }) {
   return (
     <>
       <SectionHead idx="06 /" title="Audit Log" desc="Append-only record of every classify, discover, request, negotiate and pull — the backbone of accountable access." />
+      <Explainer help={TAB_HELP.audit} />
       <Panel
         title="reed_audit_event"
         right={
@@ -438,7 +610,20 @@ function Audit({ api }: { api: Api }) {
 
 /* ------------------------------ Negotiate ------------------------------ */
 const FLOW = ["fetch offer", "negotiate", "FINALIZED", "transfer", "STARTED", "EDR", "pull payload"];
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Map the live negotiation stage onto the shared topology diagram's step. */
+function stageToStep(stage: number): StepId | null {
+  switch (stage) {
+    case 0: return "discover";
+    case 1:
+    case 2: return "negotiate";
+    case 3: return "transfer";
+    case 4:
+    case 5: return "edr";
+    case 6: return "pull";
+    default: return null;
+  }
+}
 
 function Negotiate({ api, config }: { api: Api; config: AppConfig }) {
   const cat = useAsync(() => api.providerCatalog(), []);
@@ -453,44 +638,8 @@ function Negotiate({ api, config }: { api: Api; config: AppConfig }) {
   async function run(assetId: string) {
     setRunning(assetId); setStage(0); setLog([]); setPayload(null); setErr(null);
     try {
-      const offerId = offerIdFor(cat.data, assetId);
-      if (!offerId) throw new Error(`no contract offer found for ${assetId}`);
-      add(`◆ offer ${offerId.slice(0, 28)}…`);
-
-      setStage(1);
-      const neg = await api.negotiate(offerId, assetId);
-      const negId = neg["@id"] ?? neg.id;
-      add(`◆ negotiation ${negId}`);
-      let agreementId = "";
-      for (let i = 0; i < 60; i++) {
-        const n = await api.getNegotiation(negId);
-        const st = val(n.state) ?? val(n["edc:state"]);
-        if (st === "FINALIZED") { agreementId = val(n.contractAgreementId) ?? val(n["edc:contractAgreementId"]) ?? ""; break; }
-        await sleep(1500);
-      }
-      if (!agreementId) throw new Error("negotiation did not reach FINALIZED");
-      setStage(2); add(`◆ agreement ${agreementId}`);
-
-      setStage(3);
-      const tp = await api.transfer(agreementId, assetId);
-      const tpId = tp["@id"] ?? tp.id;
-      add(`◆ transfer ${tpId}`);
-      for (let i = 0; i < 60; i++) {
-        const t = await api.getTransfer(tpId);
-        if ((val(t.state) ?? val(t["edc:state"])) === "STARTED") break;
-        await sleep(1500);
-      }
-      setStage(4);
-
-      let edr: any = null;
-      for (let i = 0; i < 30; i++) { try { edr = await api.getEdr(tpId); if (edr) break; } catch { /* not ready */ } await sleep(1500); }
-      const endpoint = val(edr?.endpoint) ?? val(edr?.["edc:endpoint"]);
-      const auth = val(edr?.authorization) ?? val(edr?.["edc:authorization"]);
-      if (!endpoint || !auth) throw new Error("EDR not issued in time");
-      setStage(5); add(`◆ EDR endpoint ${endpoint}`);
-
-      const data = await api.pull(endpoint, auth);
-      setStage(6); setPayload(data); add("◆ confidential payload received ✓");
+      const data = await runReedFlow(api, assetId, { onStage: setStage, onLog: add });
+      setPayload(data);
     } catch (e: any) {
       setErr(String(e.message ?? e));
     } finally {
@@ -501,8 +650,13 @@ function Negotiate({ api, config }: { api: Api; config: AppConfig }) {
   return (
     <>
       <SectionHead idx="03 /" title="Negotiate · Consumer Pull" desc={`Run the full contract flow from ${config.consumerManagementUrl.includes("29193") ? "consumer-1" : "the consumer"} against ${config.provider.id}: negotiate → FINALIZED → transfer → EDR → pull.`} />
+      <Explainer help={TAB_HELP.negotiate} />
 
-      <div className="flowbar" style={{ marginBottom: 16 }}>
+      <Panel title="live flow · control plane ⇄ data plane" right={<span className="mono faint" style={{ fontSize: 10.5 }}>{running ? "running…" : stage >= 6 ? "complete" : stage >= 0 ? "in progress" : "idle"}</span>}>
+        <Topology active={stageToStep(stage)} interactive={false} />
+      </Panel>
+
+      <div className="flowbar" style={{ margin: "16px 0" }}>
         {FLOW.map((s, i) => (
           <span key={s} style={{ display: "contents" }}>
             <span className={`step ${stage > i ? "done" : stage === i ? "active" : ""}`}>{s}</span>
