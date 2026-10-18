@@ -57,13 +57,14 @@ public class SubmodelController {
                 props.ownerKey(asset.ownerBpn).getBytes(StandardCharsets.UTF_8))) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "missing or invalid X-Api-Key for this asset's owner");
         }
-        // The owner's data plane names the consumer from the EDR token it has just verified, so the
-        // usage layer records who received the payload (actor), and the owner (in the detail).
-        var consumer = consumerDid == null ? null
-                : participants.findByDid(consumerDid).map(p -> p.bpn).orElse(consumerDid);
-        audit.save(new AuditEvent(EventType.PULL, consumer != null ? consumer : asset.ownerBpn, assetId,
+        // The owner's data plane names the consumer from the EDR token it has just verified. That is an
+        // assertion by the (key-authenticated) owner, so the owner stays the audit actor and the
+        // consumer goes into the detail - and only if the DID belongs to a known member.
+        var consumer = consumerDid == null ? null : participants.findByDid(consumerDid).map(p -> p.bpn).orElse(null);
+        audit.save(new AuditEvent(EventType.PULL, asset.ownerBpn, assetId,
                 "confidential payload of " + asset.ownerBpn + " pulled via EDR data plane"
-                        + (consumer != null ? " by " + consumer : "")));
+                        + (consumer != null ? " by " + consumer + " (consumer named by the owner's data plane from the verified EDR)"
+                        : consumerDid != null ? " by an unrecognised consumer" : "")));
         return ResponseEntity.ok(asset.payload);
     }
 }
