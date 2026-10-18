@@ -26,7 +26,7 @@ reed:
   internal-url: ${REED_INTERNAL_URL:http://reed-backend:8080}
   # dcp = credential-constrained EDC policies; mock = permissive (iam-mock connectors).
   identity-mode: ${REED_IDENTITY_MODE:dcp}
-  did-pattern: ${REED_DID_PATTERN:did:web:identityhub%3A7083:{name}}
+  did-pattern: ${REED_DID_PATTERN:did:web:{name}-ih%3A7083:{name}}
   cors:
     origins: ${REED_CORS_ORIGINS:http://localhost:8088}
   security:

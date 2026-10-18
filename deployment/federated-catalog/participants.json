@@ -1,7 +1,7 @@
 [
   {
     "name": "nordvind",
-    "id": "did:web:identityhub%3A7083:nordvind",
+    "id": "did:web:nordvind-ih%3A7083:nordvind",
     "url": "http://nordvind:19194/protocol/2025-1",
     "supportedProtocols": [
       "dataspace-protocol-http:2025-1"
@@ -9,7 +9,7 @@
   },
   {
     "name": "hanse",
-    "id": "did:web:identityhub%3A7083:hanse",
+    "id": "did:web:hanse-ih%3A7083:hanse",
     "url": "http://hanse:41194/protocol/2025-1",
     "supportedProtocols": [
       "dataspace-protocol-http:2025-1"
@@ -17,7 +17,7 @@
   },
   {
     "name": "castellum",
-    "id": "did:web:identityhub%3A7083:castellum",
+    "id": "did:web:castellum-ih%3A7083:castellum",
     "url": "http://castellum:29194/protocol/2025-1",
     "supportedProtocols": [
       "dataspace-protocol-http:2025-1"
@@ -25,7 +25,7 @@
   },
   {
     "name": "wisla",
-    "id": "did:web:identityhub%3A7083:wisla",
+    "id": "did:web:wisla-ih%3A7083:wisla",
     "url": "http://wisla:42194/protocol/2025-1",
     "supportedProtocols": [
       "dataspace-protocol-http:2025-1"
@@ -33,7 +33,7 @@
   },
   {
     "name": "maasvlakte",
-    "id": "did:web:identityhub%3A7083:maasvlakte",
+    "id": "did:web:maasvlakte-ih%3A7083:maasvlakte",
     "url": "http://maasvlakte:43194/protocol/2025-1",
     "supportedProtocols": [
       "dataspace-protocol-http:2025-1"
@@ -41,7 +41,7 @@
   },
   {
     "name": "rhein-ndt",
-    "id": "did:web:identityhub%3A7083:rhein-ndt",
+    "id": "did:web:rhein-ndt-ih%3A7083:rhein-ndt",
     "url": "http://rhein-ndt:44194/protocol/2025-1",
     "supportedProtocols": [
       "dataspace-protocol-http:2025-1"

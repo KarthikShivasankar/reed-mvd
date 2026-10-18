@@ -158,6 +158,11 @@ public class HttpPullProxyExtension implements ServiceExtension {
             if (authKey != null && !authKey.isBlank() && authCode != null) {
                 builder.addHeader(authKey, authCode);
             }
+            // Tell the upstream who is pulling: the EDR token (verified above) names the consumer in "aud".
+            var consumer = audience(token);
+            if (consumer != null) {
+                builder.addHeader("X-Edc-Consumer", consumer);
+            }
             var req = builder.build();
             try (var resp = CLIENT.newCall(req).execute()) {
                 var body = resp.body() != null ? resp.body().bytes() : new byte[0];
@@ -166,6 +171,21 @@ public class HttpPullProxyExtension implements ServiceExtension {
             } catch (IOException e) {
                 return Response.status(INTERNAL_SERVER_ERROR)
                         .entity("proxy error: " + e.getMessage()).build();
+            }
+        }
+
+        /** The "aud" claim of an already-verified EDR JWT, i.e. the consumer's participant id (DID). */
+        static String audience(String jwt) {
+            var parts = jwt.replaceFirst("(?i)^Bearer\\s+", "").split("\\.");
+            if (parts.length < 2) {
+                return null;
+            }
+            try {
+                var claims = new String(java.util.Base64.getUrlDecoder().decode(parts[1]), java.nio.charset.StandardCharsets.UTF_8);
+                var m = java.util.regex.Pattern.compile("\"aud\"\\s*:\\s*\"([^\"]+)\"").matcher(claims);
+                return m.find() ? m.group(1) : null;
+            } catch (IllegalArgumentException e) {
+                return null;
             }
         }
     }

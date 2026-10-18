@@ -25,6 +25,12 @@ dependencies {
     runtimeOnly(libs.edc.cel.api.v5)
     runtimeOnly(libs.edc.dcp.cel)
 
+    // Postgres-backed stores, so contracts, transfers and policies survive restarts
+    runtimeOnly(libs.edc.bom.controlplane.sql)
+    runtimeOnly(libs.edc.bom.dataplane.sql)
+    runtimeOnly(libs.edc.cel.store.sql)
+    runtimeOnly(libs.postgresql)
+
     // Consumer-side EDR query API (/management/v3/edrs/{tpId}/dataaddress)
     runtimeOnly(libs.edc.edr.cache.api)
 

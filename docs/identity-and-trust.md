@@ -9,18 +9,19 @@ credentials) from **who a person is** (proved to the REED backend with a Keycloa
  Issuer Service  ── reads ──>  REED registry views (vc_membership, vc_certification, vc_supplier_relation)
    │ issues VCs (DCP)
    ▼
- IdentityHub  (one participant context per member: DID document, keys, credentials, STS)
-   ▲  self-issued token + verifiable presentation
-   │
+ A's IdentityHub  (A's DID document, keys, credentials, STS)        B's IdentityHub
+   ▲  self-issued token + verifiable presentation                      ▲ resolves A's DID, checks VCs
+   │                                                                   │
  connector A  ──── DSP catalog / negotiation / transfer ────>  connector B
                                                                resolves A's did:web, verifies the
                                                                credentials (trusted issuer only),
                                                                evaluates its CEL policy rules
 ```
 
-- **DIDs**: `did:web:identityhub%3A7083:<connector>` resolved at
-  `http://identityhub:7083/<connector>/did.json`; the issuer is `did:web:issuerservice%3A10016:issuer`.
-  The DID **is** the EDC participant id.
+- **One IdentityHub per company** (`<name>-ih`, plus `federated-catalog-ih` for the operator), each
+  with its own database and Vault folder.
+- **DIDs**: `did:web:<name>-ih%3A7083:<name>` resolved at `http://<name>-ih:7083/<name>/did.json`;
+  the issuer is `did:web:issuerservice%3A10016:issuer`. The DID **is** the EDC participant id.
 - **Credentials** (`VC1_0_JWT`, 30 days, revocable via a status list):
 
 | Credential | Claims | Source |
@@ -66,10 +67,28 @@ supply relation to Nordvind, does not even see Nordvind's bill of material.
 1. issuer tenant; 2. three `database` attestation definitions; 3. three credential definitions;
 4. for every member with a connector (and the operator running the federated catalog): a holder
 in the Issuer Service and a participant context in the IdentityHub (DID document with
-`CredentialService` and `ProtocolEndpoint`); 5. credential requests, waiting for `ISSUED`.
-Every call is idempotent (409 = exists). The admin APIs are protected by the super-user key
-generated into `deployment/.env` (`extensions/superuser-seed` creates that admin context, which
-the non-OAuth IdentityHub/Issuer BOMs of 0.17.0 do not ship).
+`CredentialService` and `ProtocolEndpoint`); 5. credential requests, waiting for `ISSUED` - any credential not ISSUED (state 500) is requested
+again, which also repairs credentials EDC moved to ERROR. Every call is idempotent (409 = exists).
+Each IdentityHub's admin API has its own key (`IH_KEY_<NAME>` in `deployment/.env`, host port
+`<prefix>081`, localhost only); `extensions/superuser-seed` creates that admin context, which the
+non-OAuth IdentityHub/Issuer BOMs of 0.17.0 do not ship.
+
+**Startup order matters:** an IdentityHub checks its credentials' revocation status at the issuer
+when it starts. If the issuer is unreachable, EDC moves the credentials to ERROR and does not
+recover them, so every IdentityHub waits for a healthy issuer (`depends_on`).
+
+## Secrets: Vault
+
+One Vault server with file storage (`reed-vault-data`), initialised and unsealed on every
+`docker compose up` by `vault-init` (`deployment/vault-init/init.sh`, generated). Every identity -
+each company, the federated-catalog operator, the issuer - gets:
+
+- a folder `secret/<name>/` (`edc.vault.hashicorp.folder`) holding its DID keys, STS client secret,
+  Management API key, EDR signing keys, EDR tokens and AES key;
+- a policy `reed-<name>` allowing only that folder, and a periodic token bound to it
+  (`VAULT_TOKEN_<NAME>` in `.env`), passed to that company's connector and IdentityHub only.
+
+A company's runtime cannot read another company's secrets (403 from Vault).
 
 ## People: Keycloak
 

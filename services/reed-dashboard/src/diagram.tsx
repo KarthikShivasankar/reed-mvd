@@ -306,7 +306,7 @@ export function Topology({
 
         {/* federated catalog + identity */}
         <Box x={420} y={24} w={200} h={58} title="Federated Catalog" sub=":39193 · crawls all members" variant="fc" active={activeId === "publish" || activeId === "discover"} />
-        <Box x={24} y={24} w={300} h={58} title="IdentityHub + Issuer" sub="DIDs · verifiable credentials · STS" variant="fc" active={activeId === "discover" || activeId === "negotiate"} />
+        <Box x={24} y={24} w={300} h={58} title="Own IdentityHub · REED Issuer" sub="DID · verifiable credentials · STS" variant="fc" active={activeId === "discover" || activeId === "negotiate"} />
 
         {/* consumer */}
         <Box x={24} y={108} w={330} h={332} title={consumer.title} variant="container" />

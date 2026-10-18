@@ -27,6 +27,12 @@ edc-dcp-cel    = { module = "org.eclipse.edc:decentralized-claims-cel", version.
 # For the superuser-seed extension (IdentityHub / IssuerService admin bootstrap)
 edc-ih-spi = { module = "org.eclipse.edc:identity-hub-spi", version.ref = "edc" }
 
+# Persistence: connector stores (assets, policies, negotiations, agreements, transfers, EDRs,
+# data-plane tokens) and CEL expressions in Postgres instead of memory
+edc-bom-controlplane-sql = { module = "org.eclipse.edc:controlplane-feature-sql-bom", version.ref = "edc" }
+edc-bom-dataplane-sql    = { module = "org.eclipse.edc:dataplane-feature-sql-bom", version.ref = "edc" }
+edc-cel-store-sql        = { module = "org.eclipse.edc:cel-store-sql", version.ref = "edc" }
+
 # Overlays added on top of the BOMs
 edc-edr-cache-api   = { module = "org.eclipse.edc:edr-cache-api", version.ref = "edc" }
 edc-vault-hashicorp = { module = "org.eclipse.edc:vault-hashicorp", version.ref = "edc" }

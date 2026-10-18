@@ -19,7 +19,7 @@ FAILED=0
 # connector <name> -> "prefix bpn"
 prefix()   { jq -r --arg n "$1" '.participants[] | select(.connector.name==$n) | .connector.portPrefix' "$ROSTER"; }
 bpn_of()   { jq -r --arg n "$1" '.participants[] | select(.connector.name==$n) | .bpn' "$ROSTER"; }
-did_of()   { echo "did:web:identityhub%3A7083:$1"; }
+did_of()   { echo "did:web:$1-ih%3A7083:$1"; }   # each identity has its own IdentityHub
 dsp_of()   { echo "http://$1:$(prefix "$1")194/protocol/2025-1"; }
 mgmt_url() { echo "http://localhost:$(prefix "$1")193/management"; }
 mgmt_key() { local v="MGMT_KEY_$(echo "$1" | tr 'a-z-' 'A-Z_')"; echo "${!v}"; }

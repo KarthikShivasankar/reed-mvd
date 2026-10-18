@@ -11,16 +11,16 @@ only after a contract** - and every connector proves who it is with **verifiable
 
 | | |
 |---|---|
-| **Connectors** | 6 EDC `0.17.0` connectors (control + data plane), one per company, plus a federated catalog |
-| **Identity for organisations** | Decentralized Claims Protocol (DCP): IdentityHub, REED Issuer Service, `did:web`, Membership / Certification / SupplierRelation credentials. EDC policies are CEL rules over those credentials |
+| **Connectors** | 6 EDC `0.17.0` connectors (control + data plane, Postgres-backed stores), one per company, plus a federated catalog |
+| **Identity for organisations** | Decentralized Claims Protocol (DCP): **one IdentityHub per company**, a REED Issuer Service, `did:web`, Membership / Certification / SupplierRelation credentials. EDC policies are CEL rules over those credentials. Secrets in a persistent Vault, each company confined to its own folder |
 | **Identity for people** | Keycloak (OIDC, PKCE): roles `buyer`, `supplier-engineer`, `quality-auditor`, `admin`; the token carries the user's organisation |
 | **Matchmaking** | Hard filters + six weighted criteria (lead time, tolerance margin, logistics for bulky parts, track record, sector, embedded CO2 for CBAM) with per-criterion explanations, partner recommendations and a contract-backed match lifecycle |
 | **Assistant** | Local LLM only: **Qwen3.8** via **LiteLLM**, routed to **Ollama** (default) or **vLLM**; personal data is redacted, scores come from the scorer |
 | **Real cases** | 9 RFQs across wind, shipbuilding/offshore, rail/heavy machinery and hydropower, 15 fictional European companies in real EU industrial clusters |
 
-> Demo-grade infrastructure: dev-mode Vault (in-memory), in-memory connector stores, no TLS,
-> one shared IdentityHub. Everything the data space *means* (credentials, policies, contracts,
-> audit) is real; see [Production gaps](#production-gaps).
+> State survives restarts: Vault (file storage, auto-unsealed), every connector, IdentityHub,
+> the issuer, Keycloak and the REED registry persist in Postgres - `run-persistence.sh` proves it.
+> Remaining gaps (mainly TLS) are listed under [Production gaps](#production-gaps).
 
 ## Topology
 
@@ -34,7 +34,7 @@ flowchart LR
   PG[(Postgres<br/>reed / identityhub / issuer)]
   LL[LiteLLM :4000] --> OL[Ollama qwen3.8<br/>host :11434]
   LL -.-> VL[vLLM Qwen3.8-NVFP4<br/>profile vllm]
-  IH[IdentityHub<br/>DIDs, VCs, STS]
+  IH[IdentityHub per company<br/>DID, VCs, STS]
   IS[Issuer Service<br/>attestations = REED registry]
   FC[Federated catalog :39193]
   subgraph Connectors[EDC connectors - control + data plane]
@@ -86,6 +86,7 @@ docker compose -f deployment/docker-compose.yml up --build -d
 # 5. Verify end to end
 ./run-transfer.sh        # DCP contract + EDR pull, and two credential-based refusals
 ./run-matchmaking.sh     # all 9 real-case scenarios, full lifecycle where both sides run a connector
+./run-persistence.sh     # full stop/start without wiping volumes: nothing needs re-seeding
 (cd services/reed-dashboard && npm ci && npx playwright install chromium && npx playwright test)
 ```
 
@@ -102,8 +103,9 @@ Open **http://localhost:8088** and log in (password for every demo user: `reed-d
 | `vagant-buyer` | Vagant Components (**not** a member) | sees nothing, cannot post |
 | `reed-admin` | dataspace operator | every view, any member's catalogue |
 
-Teardown: `docker compose -f deployment/docker-compose.yml down -v` (the `-v` drops Vault and
-Postgres; after it, run steps 3-4 again).
+Stop with `docker compose -f deployment/docker-compose.yml down` and start again with `up -d` -
+no seeding needed. `down -v` wipes Vault and Postgres (then run steps 3-4 again). Every published
+port is bound to `127.0.0.1`.
 
 ## The real-case scenarios
 
@@ -153,16 +155,27 @@ docs/                               architecture, identity, matchmaking, data mo
 
 ## Production gaps
 
-Deliberate shortcuts, each marked `ponytail:` in code where it lives:
+What is production-style today: per-company IdentityHubs and Vault folders, persistent Vault and
+stores, Keycloak in production mode on Postgres, generated secrets (`deployment/.env`), admin APIs
+and databases bound to localhost, key-protected Management APIs behind a user-scoped relay,
+credential-based EDC policies, an audit trail naming who pulled each payload.
 
-- **One shared IdentityHub** holds every member's keys (one trust domain). Production: one hub per
-  member, or a hosted wallet per member.
-- **Dev-mode Vault and in-memory connector stores**: a restart means re-running the seed scripts.
-  Production: Vault with storage + the EDC SQL BOMs.
-- **No TLS**, `did:web` over plain http inside Docker.
+Deliberate remaining shortcuts, each marked `ponytail:` in code where it lives:
+
+- **No TLS.** Everything is plain http on one host (`did:web` resolution included). Production:
+  certificates on every endpoint (`edc.iam.did.web.use.https=true`), Keycloak `KC_HTTPS_*`.
+- **Vault unseal key and tokens**: the unseal key is kept in a local volume, and tokens use fixed
+  ids from `.env` (Vault hashes those with SHA-1). Production: auto-unseal (KMS/HSM) and
+  AppRole/Kubernetes auth.
+- **One host, one Vault server, one Postgres** for all companies (isolated by Vault policy and
+  separate databases). Production: each company runs its own connector, IdentityHub and secrets.
+- **Shared submodel store**: all owners' payloads are served by the REED backend (each owner with
+  its own key). Production: each company serves its own payloads.
 - **Delimited-string credential claims** (`,ISO9001,DNV,`) keep the issuer's database attestations
   simple; JSON-array claims would be cleaner.
-- **The submodel store is shared** by all owners (each owner has its own key). Production: each
-  member serves its own payloads.
 - **Usage-layer duties** (no redistribution, delete after expiry) are recorded and audited, not
   technically enforced after the payload leaves the provider.
+- **EDC Management API v3** is used throughout; EDC 0.17.0 logs that it is deprecated in favour of v4.
+- **Credential status checks**: if an IdentityHub cannot reach the issuer's status list, EDC
+  marks the credentials ERROR and does not recover them; startup ordering prevents it, and
+  `./seed-identity.sh` re-issues any credential that is not ISSUED.

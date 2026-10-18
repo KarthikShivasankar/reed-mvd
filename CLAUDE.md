@@ -31,9 +31,10 @@ docker compose -f deployment/docker-compose.yml up --build -d    # --profile vll
 ./seed-reed.sh                     # per-owner EDC assets, policies, contract defs, CEL rules
 ./run-transfer.sh                  # DCP e2e: 1 contract + pull, 2 credential refusals (exit 0 = all PASS)
 ./run-matchmaking.sh               # 9 scenarios (SCENARIO=R1 for one)
+./run-persistence.sh               # down + up with volumes kept: nothing may need re-seeding
 ./gradlew :services:reed-backend:test                          # scorer, fixtures, assistant guardrails
 cd services/reed-dashboard && npx playwright test              # UI e2e (stack must be up + seeded)
-docker compose -f deployment/docker-compose.yml down -v        # -v drops Vault + Postgres
+docker compose -f deployment/docker-compose.yml down -v        # -v drops Vault + Postgres (seed again)
 ```
 
 The host may only have JDK 8: pass `-Porg.gradle.java.installations.paths=<jdk17>` with
@@ -45,9 +46,12 @@ The host may only have JDK 8: pass `-Porg.gradle.java.installations.paths=<jdk17
 Participants (BPN, company, role, location, quay/rail, sectors, connector name + port prefix,
 attested certifications, relations, public capability, confidential capability, assets, demo
 users) live in the roster. The generator writes `deployment/docker-compose.yml` (**generated - do
-not hand-edit**), each `deployment/<connector>/config.properties`, identityhub/issuerservice
-configs, FC `participants.json`, `deployment/dashboard/config.json`, the Keycloak realm, PEM keys
-and `deployment/.env` (secrets, gitignored, preserved across runs). Scenario RFQs + expected
+not hand-edit**), each `deployment/<connector>/config.properties`, one
+`deployment/identityhub/<name>.properties` per identity, the issuer config, `deployment/vault-init/`
+(Vault config + init script), `deployment/postgres/init.sql`, FC `participants.json`,
+`deployment/dashboard/config.json`, the Keycloak realm, PEM keys and `deployment/.env` (all
+secrets: mgmt keys, per-identity IH keys and Vault tokens, Postgres/Keycloak passwords; gitignored,
+preserved across runs). All published ports bind to 127.0.0.1. Scenario RFQs + expected
 outcomes live in `deployment/scenarios/matchmaking.json`. Both files are bind-mounted into the
 backend and seeded into an **empty** database (`down -v` to reseed).
 
@@ -71,9 +75,13 @@ Spring Boot 3.3 + Postgres, schema by **Flyway** (`db/migration`, Hibernate `val
 - `DataSeeder` seeds templates, matrix, participants, assets, relations, history, RFQs.
 
 ### Identity (DCP) - see `docs/identity-and-trust.md`
-- One shared IdentityHub (participant context per connector + `federated-catalog`), REED Issuer
-  Service with stock `database` attestations over the backend's `vc_*` views.
-- Connector `edc.participant.id` **is its DID** `did:web:identityhub%3A7083:<name>`.
+- One IdentityHub **per identity** (`<name>-ih`, each connector + `federated-catalog`), REED Issuer
+  Service with stock `database` attestations over the backend's `vc_*` views. IdentityHubs must
+  start after a healthy issuer (status-list check at startup moves credentials to ERROR otherwise;
+  `seed-identity.sh` re-issues anything not ISSUED = state 500).
+- Connector `edc.participant.id` **is its DID** `did:web:<name>-ih%3A7083:<name>`.
+- Vault: file storage, `vault-init` unseals on every `up`; each identity has folder `secret/<name>/`
+  (`edc.vault.hashicorp.folder`), a policy limited to it and its own token (`VAULT_TOKEN_<NAME>`).
 - All three credential scopes are **DEFAULT** (presented on every request) - catalog requests
   carry no policy, so POLICY-scoped credentials never reach access policies.
 - **Policy JSON-LD gotcha**: policy definitions must use context
@@ -90,7 +98,9 @@ Spring Boot 3.3 + Postgres, schema by **Flyway** (`db/migration`, Hibernate `val
   re-reads `participants.json` each crawl); `launchers/identity-hub`; `launchers/issuerservice`.
 - `http-pull-proxy` re-adds the public data plane removed in 0.17.0 (EDR auth, `authKey`/`authCode`
   upstream header).
-- Connector stores and CEL expressions are **in memory**: a connector restart needs `./seed-reed.sh`.
+- Connector stores and CEL expressions are in **Postgres** (`edc_<name>`, SQL BOMs + `cel-store-sql`);
+  Keycloak runs in production mode on Postgres. Seeding is needed once per `down -v`.
+- `http-pull-proxy` forwards `X-Edc-Consumer` (the verified EDR token's `aud`) so PULL audits name the consumer.
 - Management APIs: `web.http.management.auth.type=tokenbased`, key alias `<name>-mgmt-api-key` in Vault.
 - All EDC `*/request` list endpoints need a `QuerySpec` body.
 
@@ -99,7 +109,7 @@ Connector prefixes: 19 nordvind, 29 castellum, 41 hanse, 42 wisla, 43 maasvlakte
 39 FC (suffixes 191 api, 192 control, 193 management, 194 DSP, 195 version, 291 public). Prefixes
 ≥ 66 overflow the port range. Container-to-container URLs use service names; browser/host URLs
 use `localhost`. Dashboard 8088, Keycloak 8180, backend 8081, LiteLLM 4000, vLLM 8000,
-IdentityHub admin 7081, Issuer admin 10013/10015.
+IdentityHub admin `<prefix>081`, Issuer admin 10013/10015, Vault 8200, Postgres 5432.
 
 ### Dashboard (`services/reed-dashboard/`)
 React + Vite + TS, keycloak-js login, all calls via the backend (bearer token), hash routing,

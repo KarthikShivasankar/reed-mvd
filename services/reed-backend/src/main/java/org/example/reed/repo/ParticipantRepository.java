@@ -16,4 +16,6 @@ public interface ParticipantRepository extends JpaRepository<Participant, String
     boolean existsByBpnAndConsortiumTrue(String bpn);
 
     Optional<Participant> findByConnectorName(String connectorName);
+
+    Optional<Participant> findByDid(String did);
 }

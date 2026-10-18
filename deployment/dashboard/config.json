@@ -12,7 +12,7 @@
       "bpn": "BPN-REED-OEM-0001",
       "company": "Nordvind Energy Systems AS",
       "short": "Nordvind",
-      "participantId": "did:web:identityhub%3A7083:nordvind",
+      "participantId": "did:web:nordvind-ih%3A7083:nordvind",
       "dspUrl": "http://nordvind:19194/protocol/2025-1",
       "publicUrl": "http://localhost:19291/public/"
     },
@@ -21,7 +21,7 @@
       "bpn": "BPN-REED-OEM-0002",
       "company": "Hanse Marine & Rail GmbH",
       "short": "Hanse",
-      "participantId": "did:web:identityhub%3A7083:hanse",
+      "participantId": "did:web:hanse-ih%3A7083:hanse",
       "dspUrl": "http://hanse:41194/protocol/2025-1",
       "publicUrl": "http://localhost:41291/public/"
     },
@@ -30,7 +30,7 @@
       "bpn": "BPN-REED-SUP-0002",
       "company": "Castellum Fundición S.L.",
       "short": "Castellum",
-      "participantId": "did:web:identityhub%3A7083:castellum",
+      "participantId": "did:web:castellum-ih%3A7083:castellum",
       "dspUrl": "http://castellum:29194/protocol/2025-1",
       "publicUrl": "http://localhost:29291/public/"
     },
@@ -39,7 +39,7 @@
       "bpn": "BPN-REED-SUP-0003",
       "company": "Wisła Precision Machining Sp. z o.o.",
       "short": "Wisła",
-      "participantId": "did:web:identityhub%3A7083:wisla",
+      "participantId": "did:web:wisla-ih%3A7083:wisla",
       "dspUrl": "http://wisla:42194/protocol/2025-1",
       "publicUrl": "http://localhost:42291/public/"
     },
@@ -48,7 +48,7 @@
       "bpn": "BPN-REED-SUP-0004",
       "company": "Maasvlakte Heavy Lift B.V.",
       "short": "Maasvlakte",
-      "participantId": "did:web:identityhub%3A7083:maasvlakte",
+      "participantId": "did:web:maasvlakte-ih%3A7083:maasvlakte",
       "dspUrl": "http://maasvlakte:43194/protocol/2025-1",
       "publicUrl": "http://localhost:43291/public/"
     },
@@ -57,7 +57,7 @@
       "bpn": "BPN-REED-SUP-0005",
       "company": "Rhein NDT Prüflabor GmbH",
       "short": "Rhein NDT",
-      "participantId": "did:web:identityhub%3A7083:rhein-ndt",
+      "participantId": "did:web:rhein-ndt-ih%3A7083:rhein-ndt",
       "dspUrl": "http://rhein-ndt:44194/protocol/2025-1",
       "publicUrl": "http://localhost:44291/public/"
     }

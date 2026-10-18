@@ -5,6 +5,8 @@
   "sslRequired": "none",
   "registrationAllowed": false,
   "loginWithEmailAllowed": false,
+  "bruteForceProtected": true,
+  "failureFactor": 10,
   "accessTokenLifespan": 900,
   "ssoSessionIdleTimeout": 3600,
   "roles": {

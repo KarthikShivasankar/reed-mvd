@@ -29,8 +29,10 @@ dashboard config.
 }
 ```
 
-Port prefixes are two digits giving ports `<p>191`-`<p>195` and `<p>291`; they must stay below
-65535, so use 10-64 and avoid the ones in use (19, 29, 39, 41-44).
+Port prefixes are two digits giving ports `<p>191`-`<p>195`, `<p>291` and the IdentityHub admin
+port `<p>081`; they must stay below 65535, so use 10-64 and avoid the ones in use (19, 29, 39, 41-44).
+The generator also gives the newcomer its own IdentityHub (`<name>-ih`), database, Vault folder,
+policy and token.
 
 Without `connector` the company is still a member: it appears in the directory and in rankings,
 can be shortlisted, but cannot confirm a match (that needs an EDC contract). Set
@@ -39,7 +41,7 @@ can be shortlisted, but cannot confirm a match (that needs an EDC contract). Set
 ## 2. Regenerate and restart
 
 ```bash
-python3 tools/gen_topology.py      # new connector config, compose service, realm users, keys, .env entry
+python3 tools/gen_topology.py      # connector + IdentityHub configs and services, realm users, keys, .env entries
 docker compose -f deployment/docker-compose.yml down -v   # roster is seeded into an empty database
 docker compose -f deployment/docker-compose.yml up --build -d
 ./seed-identity.sh                 # DID + credentials for the new connector
