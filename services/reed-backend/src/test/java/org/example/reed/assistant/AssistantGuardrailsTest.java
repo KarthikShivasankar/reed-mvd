@@ -28,6 +28,7 @@ class AssistantGuardrailsTest {
         assertThat(d.sector()).isEqualTo("wind");
         assertThat(d.requiredProcesses()).contains("sand-casting", "heat-treatment");
         assertThat(d.partnerProcesses()).contains("ndt-ut");
+        assertThat(d.requiredProcesses()).doesNotContain("machining-milling");
     }
 
     @Test
@@ -36,6 +37,11 @@ class AssistantGuardrailsTest {
                 + "about the 38 t hub (4.2 x 4.0 x 3.6 m).", List.of("Ingrid Berg"));
         assertThat(r.text()).doesNotContain("Ingrid", "912", "@").contains("38 t", "4.2 x 4.0 x 3.6 m");
         assertThat(r.redactions()).isEqualTo(3);
+
+        var parts = PersonalDataRedactor.redact("Hub batch 1792316850123, drawing DWG-4471-02, due 2027-07-25, "
+                + "call Hanse on 0049 431 1234567 or (030) 1234 5678", List.of());
+        assertThat(parts.text()).contains("1792316850123", "DWG-4471-02", "2027-07-25").doesNotContain("1234567", "5678");
+        assertThat(parts.redactions()).isEqualTo(2);
     }
 
     @Test

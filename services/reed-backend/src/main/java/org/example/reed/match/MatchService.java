@@ -36,6 +36,8 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Objects;
+import java.util.regex.Pattern;
 import java.util.Set;
 
 /**
@@ -58,6 +60,9 @@ public class MatchService {
 
     public record Opportunity(Rfq rfq, String buyerName, MatchScorer.Result result, Long matchId, String state) {
     }
+
+    /** EDC ids are UUIDs or similar; anything else never reaches a connector URL. */
+    private static final Pattern AGREEMENT_ID = Pattern.compile("[A-Za-z0-9:_.-]{1,128}");
 
     private final ParticipantRepository participants;
     private final RfqRepository rfqs;
@@ -167,7 +172,7 @@ public class MatchService {
         expect(m, MatchRecord.State.SHORTLISTED);
         m.state = accept ? MatchRecord.State.ACCEPTED : MatchRecord.State.DECLINED;
         m.updatedAt = clock.instant();
-        log(m.supplierBpn, m.detailAssetId, (accept ? "accepted" : "declined") + " match for " + m.rfqId);
+        log(m.supplierBpn, m.detailAssetId, (accept ? "accepted" : "declined") + " match for " + m.rfqId + " from " + m.buyerBpn);
         return matches.save(m);
     }
 
@@ -187,12 +192,21 @@ public class MatchService {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "both parties need an EDC connector to confirm via a contract agreement");
         }
+        if (!AGREEMENT_ID.matcher(agreementId).matches()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "malformed agreement id");
+        }
         var agreement = readJson(connectors.get(buyer.connectorName, buyer.managementUrl,
                 "/v3/contractagreements/" + agreementId));
         var assetId = text(agreement, "assetId");
         if (!m.detailAssetId.equals(assetId)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "agreement " + agreementId + " covers asset " + assetId + ", expected " + m.detailAssetId);
+        }
+        var provider = text(agreement, "providerId");
+        var consumer = text(agreement, "consumerId");
+        if (!Objects.equals(provider, supplier.did) || !Objects.equals(consumer, buyer.did)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "agreement " + agreementId + " is between "
+                    + consumer + " and " + provider + ", not between this buyer and supplier");
         }
         m.agreementId = agreementId;
         var contradictions = contradictions(rfqs.findById(m.rfqId).orElseThrow(), m.detailAssetId);

@@ -61,7 +61,7 @@ public final class RuleRfqParser {
             new String[]{"heat-treatment", "heat treat", "quench", "temper", "stress reliev", "cast", "forg"},
             new String[]{"open-die-forging", "forg"},
             new String[]{"machining-turning", "turn", "vtl", "lathe"},
-            new String[]{"machining-milling", "mill", "machin"},
+            new String[]{"machining-milling", "milled", "milling"},
             new String[]{"welding", "weld"},
             new String[]{"hull-block-fabrication", "hull block"},
             new String[]{"plate-rolling", "rolled", "plate rolling", "penstock"});
@@ -69,7 +69,8 @@ public final class RuleRfqParser {
             new String[]{"ndt-ut", "ultrasonic", " ut ", "ut testing", "ndt"},
             new String[]{"ndt-mt", "magnetic particle", " mt "},
             new String[]{"heavy-lift", "heavy lift", "transport", "abnormal load", "spmt"},
-            new String[]{"load-out", "load-out", "load out"});
+            new String[]{"load-out", "load-out", "load out"},
+            new String[]{"machining-turning", "finish machining", "finish-machin", "finish turning"});
 
     private RuleRfqParser() {
     }

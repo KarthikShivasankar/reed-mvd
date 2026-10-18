@@ -30,6 +30,21 @@ public class ReedProperties {
         return apiKey;
     }
 
+    /**
+     * The key one owner's data plane presents to the submodel service: HMAC-SHA256 of the
+     * owner's BPN under the master {@code apiKey}. A participant that reads its own asset data
+     * addresses learns only its own key, which unlocks only its own payloads.
+     */
+    public String ownerKey(String ownerBpn) {
+        try {
+            var mac = javax.crypto.Mac.getInstance("HmacSHA256");
+            mac.init(new javax.crypto.spec.SecretKeySpec(apiKey.getBytes(java.nio.charset.StandardCharsets.UTF_8), "HmacSHA256"));
+            return java.util.HexFormat.of().formatHex(mac.doFinal(ownerBpn.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        } catch (java.security.GeneralSecurityException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
     public void setApiKey(String apiKey) {
         this.apiKey = apiKey;
     }

@@ -81,10 +81,14 @@ public class AssistantController {
         return user;
     }
 
-    /** The caller's own name claims, so they can be scrubbed from free text before it reaches the model. */
+    /**
+     * The caller's own identifying claims (full name, username, e-mail), so they can be scrubbed from free
+     * text before it reaches the model. Given/family names alone are not used: as single words they
+     * collide with ordinary vocabulary and company names.
+     */
     private static List<String> personNames(Jwt jwt) {
         var out = new ArrayList<String>();
-        for (var claim : List.of("name", "given_name", "family_name", "preferred_username", "email")) {
+        for (var claim : List.of("name", "preferred_username", "email")) {
             var v = jwt.getClaimAsString(claim);
             if (v != null) {
                 out.add(v);

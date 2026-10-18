@@ -1,114 +1,77 @@
-# The REED Data Model
+# The REED data model
 
-REED is a domain-specific **manufacturing data space** for sovereign sharing of
-sensitive data about bulky parts (process capability, fixtures, quality
-evidence, simulation results, digital product passports, …). A partner can
-discover that data *exists* without receiving the confidential payload until a
-contract is accepted, and every access is policy-governed and audited.
-
-This document describes the data model implemented by the `reed-backend`
-service (`services/reed-backend/`). The backend is the **source of truth**: it
-persists the REED tables in Postgres and *renders* the EDC assets/policies/
-contract-definitions that `seed-reed.sh` pushes into the `reed-provider`
-connector. Only metadata reaches the EDC catalogue; the confidential payload
-stays in the submodel service until a contract is accepted.
+The REED backend (`services/reed-backend/`) is the **source of truth** for the data space: the
+member directory, every member's data assets, the supply-chain graph, matchmaking and the audit
+trail. It renders the EDC assets, policies, contract definitions and CEL rules that
+`seed-reed.sh` pushes into each member's connector, and the views the Issuer Service turns into
+verifiable credentials. Only metadata reaches an EDC catalog; confidential payloads leave only
+through a provider's data plane after a contract.
 
 ## Persistence
 
-Five additive tables are created automatically on backend startup
-(`spring.jpa.hibernate.ddl-auto=update`) and seeded by
-`org.example.reed.seed.DataSeeder`:
+Postgres, schema owned by **Flyway** (`src/main/resources/db/migration/V1__reed_schema.sql`;
+Hibernate only validates). Seeded on an empty database by `seed/DataSeeder.java` from
+`deployment/roster.json` and `deployment/scenarios/matchmaking.json`.
 
 | Table | Purpose |
 |---|---|
-| `reed_asset_classification` | the classification matrix (one row per asset class) |
-| `reed_policy_template` | named, reusable ODRL policy templates |
-| `reed_supply_chain_relation` | directed BPN→BPN edges (OWNS / SUPPLIES / PROJECT_MEMBER) |
-| `reed_access_request` | partner requests to negotiate access |
-| `reed_audit_event` | append-only audit log (CLASSIFY / DISCOVER / REQUEST / NEGOTIATE / PULL) |
+| `reed_participant` | member directory: BPN, name, role, country/city, VAT id, location, quay/rail access, sectors, connector, DID, attested certifications, public capability claim (JSON) |
+| `reed_asset` | one concrete asset per row: class, **owner**, sensitivity, discoverability, policy template, confidential payload (JSON) |
+| `reed_asset_classification` | the classification matrix: defaults per asset class |
+| `reed_policy_template` | named ODRL templates (permission constraints on credentials + usage duties) |
+| `reed_supply_chain_relation` | BPN → BPN edges: `OWNS`, `SUPPLIES`, `PROJECT_MEMBER` |
+| `reed_rfq` | requests for quotation (demand side of matchmaking) |
+| `reed_match` | match lifecycle per RFQ and supplier, score snapshot, EDC agreement, delivery feedback |
+| `reed_access_request` | requests to negotiate access |
+| `reed_audit_event` | append-only audit: `CLASSIFY`, `DISCOVER`, `REQUEST`, `NEGOTIATE`, `PULL`, `MATCH`, `ASSIST` |
+| views `vc_membership`, `vc_certification`, `vc_supplier_relation` | read by the Issuer Service to issue credentials (one row per holder DID) |
 
-Submodel payloads (the confidential data) are **not** a table — they live in the
-submodel service as JSON resources under
-`services/reed-backend/src/main/resources/submodels/`, served only via an
-EDR-gated pull.
+## Asset classes and the classification matrix
 
-## The eight asset classes
+| Asset class | Holds | Sensitivity | Discoverability | Default template |
+|---|---|---|---|---|
+| PartDigitalTwin | part identity, ownership, lifecycle | consortium | consortium | consortium-only |
+| BillOfMaterial | parent/child parts, supplier links | confidential | bilateral | bilateral-supplier |
+| DigitalProductPassport | materials, recyclability, carbon footprint (ESPR) | consortium | consortium | dpp-read-only |
+| ProcessCapability | machines, envelope, tolerances, free capacity, Cpk | confidential | bilateral | oem-only |
+| FixtureHandlingStrategy | fixtures, lifting and handling | confidential | bilateral | bilateral-supplier |
+| ProductionStatus | capacity, order status, quality gates | restricted | project | time-limited-pilot-access |
+| QualityEvidence | inspection reports, certificates | regulated | bilateral | oem-only |
+| SimulationResult | process simulation, energy, risk | confidential | bilateral | simulation-service-only |
 
-| Asset class | What it holds |
-|---|---|
-| PartDigitalTwin | Catalog/serialized/bulky part identity, BPN ownership, lifecycle state |
-| BillOfMaterial | Parent/child part relationships, supplier links |
-| DigitalProductPassport | Materials, recyclability, carbon footprint, compliance |
-| ProcessCapability | Machine envelope, operations, tolerances, lead time |
-| FixtureHandlingStrategy | Fixture design, lifting/handling constraints, setup |
-| ProductionStatus | Capacity, order status, quality gates, delivery |
-| QualityEvidence | Inspection reports, certificates, non-conformance |
-| SimulationResult | Process simulation, energy use, risk/lead-time estimation |
+Assets are instances owned by one member: `<class-kebab>-<connector>`, e.g.
+`process-capability-castellum`, `bill-of-material-nordvind`. A supplier's `ProcessCapability` is
+the detail behind its public capability claim; it is made **consortium-discoverable** (so buyers
+can find and negotiate it during matchmaking) while its contract policy stays `oem-only`.
 
-One sample instance per class is seeded with id `<class-kebab>-001`
-(e.g. `process-capability-001`).
+## The three policy layers
 
-## The default classification matrix (seeded)
-
-| Asset class | Sensitivity | Discoverability | Default policy template |
+| Layer | Question | REED | EDC (enforced by the provider connector) |
 |---|---|---|---|
-| PartDigitalTwin | consortium | consortium | consortium-only |
-| BillOfMaterial | confidential | bilateral | bilateral-supplier |
-| DigitalProductPassport | consortium | consortium | dpp-read-only |
-| ProcessCapability | confidential | bilateral | oem-only |
-| FixtureHandlingStrategy | confidential | bilateral | bilateral-supplier |
-| ProductionStatus | restricted | project | time-limited-pilot-access |
-| QualityEvidence | regulated | bilateral | oem-only |
-| SimulationResult | confidential | bilateral | simulation-service-only |
+| **Catalogue** | may this member know the asset exists? | `/reed/catalogue` - discoverability vs. the supply-chain graph | access policy per discoverability on the requester's credentials |
+| **Contract** | may this member agree a contract for it? | the asset's policy template | contract policy: credential constraints, e.g. role OEM |
+| **Usage** | what is allowed afterwards? | `reed:odrl` prohibitions/obligations + `PULL` audit events | - |
 
-## The policy model (three layers)
+Templates (`DataSeeder`): `consortium-only` (membership), `bilateral-supplier` (supply relation
+with the owner), `dpp-read-only` (membership, no modification), `oem-only` (role OEM),
+`time-limited-pilot-access` (shared project, until expiry, delete afterwards),
+`simulation-service-only` (role SERVICE, no derivation). See
+[identity-and-trust.md](identity-and-trust.md) for how the operands are evaluated.
 
-| Layer | Question it answers | Enforced by |
-|---|---|---|
-| catalogue | Can a partner discover the metadata exists? | REED catalogue visibility (`/reed/catalogue?bpn=`) + EDC contract-definition access policy |
-| contract | Can a partner negotiate access? | EDC/ODRL contract policy generated from a REED template |
-| usage | What obligations/prohibitions attach to the data? | EDC usage policy (ODRL) + REED audit on every submodel pull |
+## REST API (all under `/reed`, bearer token unless noted)
 
-### Catalogue visibility (`CatalogueService`)
-
-- a BPN outside the consortium discovers nothing;
-- `consortium` assets are discoverable by any consortium member;
-- `bilateral` assets need a direct SUPPLIES/OWNS relation to the owner;
-- `project` assets need a PROJECT_MEMBER relation to the owner.
-
-### Demo BPNs (`org.example.reed.config.Bpns`)
-
-| BPN | Role | Sees |
-|---|---|---|
-| `BPN-REED-OEM-0001` | OEM / owner (the reed-provider) | everything it owns |
-| `BPN-REED-SUP-0002` | supplier (the `consumer-1` connector) | consortium + bilateral |
-| `BPN-REED-SIM-0003` | simulation service | consortium + project |
-| `BPN-REED-OUT-9999` | consortium member, no relation | consortium only |
-
-## A note on enforcement under `iam-mock`
-
-The demo uses `iam-mock`, which carries no verifiable BPN/role claim, so the
-**EDC** connector cannot evaluate the BPN/role/time constraints in the rendered
-ODRL. Two consequences, by design:
-
-1. The EDC policy bodies that are actually registered are permissive `Set`
-   policies, so contract negotiation reaches `FINALIZED`.
-2. REED still generates the **faithful** ODRL (with the real constraints,
-   prohibitions and obligations) — it is attached to each asset under the
-   `reed:odrl` property and served from `/reed/policy-templates`. This is what a
-   production DCP/IdentityHub deployment would enforce. In the meantime REED
-   enforces discoverability and records access at its own catalogue/audit layer.
-
-## REST API (port 8081 on the host, 8080 in-cluster)
-
-| Method & path | Purpose |
+| Endpoint | |
 |---|---|
-| `GET /reed/classifications` | the classification matrix |
-| `GET /reed/policy-templates` | the seeded policy templates (faithful ODRL) |
-| `GET /reed/catalogue?bpn=<BPN>` | metadata discoverable by that BPN (+ DISCOVER audit) |
-| `GET /reed/submodels/{assetId}` | confidential payload; requires `X-Api-Key` (+ PULL audit) |
-| `GET /reed/edc/assets` | EDC asset payloads rendered from REED |
-| `GET /reed/edc/policydefinitions` | EDC policy definitions rendered from REED |
-| `GET /reed/edc/contractdefinitions` | EDC contract definitions rendered from REED |
-| `GET /reed/access-requests`, `POST /reed/access-requests` | list / create access requests |
-| `GET /reed/audit` | the append-only audit log (most recent first) |
+| `GET /me`, `GET /participants` | caller and member directory |
+| `GET /catalogue[?bpn=]` | discoverable assets for the caller's organisation (`?bpn=` for the operator) |
+| `GET /classifications`, `GET /policy-templates` | the model |
+| `GET /rfqs`, `POST /rfqs`, `GET /rfqs/{id}` | RFQs (posting: role `buyer`) |
+| `GET /rfqs/{id}/matches`, `GET /rfqs/{id}/partners` | ranking (full for the buyer), partner recommendations |
+| `GET /opportunities`, `GET /matches` | supplier view, the caller's matches |
+| `POST /rfqs/{id}/shortlist/{bpn}`, `POST /matches/{id}/accept\|decline\|confirm\|feedback` | lifecycle |
+| `POST /assistant/rfq-draft\|explain/{rfqId}\|chat` | local-LLM assistant |
+| `/connectors/{name}/**`, `/federated-catalog/**` | relay to EDC Management APIs |
+| `GET /audit`, `GET/POST /access-requests` | audit trail, access requests |
+| `GET /edc/{assets\|policydefinitions\|contractdefinitions}?owner=`, `GET /edc/celexpressions` | rendered EDC payloads (admin) |
+| `GET /submodels/{assetId}` | **no token**: per-owner `X-Api-Key`, called by provider data planes |
+| `GET /health`, `GET /scenarios` | **no token** |

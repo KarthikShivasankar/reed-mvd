@@ -47,8 +47,8 @@ export const STEPS: Step[] = [
     plane: "provider control plane",
     color: C.orange,
     blurb:
-      "The REED backend renders the OEM's asset classes into the provider's control plane as offers — metadata + policy only, never the payload. The federated catalog crawler scrapes that catalog into its aggregated cache.",
-    wire: "seed-reed.sh → POST /v3/assets · /v3/policydefinitions · /v3/contractdefinitions   ·   FC crawler → POST /catalog/request",
+      "The REED backend renders each owner's assets into its own connector as offers - metadata and credential-constrained policies only, never the payload. The federated catalog crawls every member's catalog with its own credentials.",
+    wire: "seed-reed.sh → POST /v5beta/celexpressions · /v3/assets · /v3/policydefinitions · /v3/contractdefinitions   ·   FC crawler → DSP catalog request",
     layer: "renders all three policy layers from the REED tables",
   },
   {
@@ -58,9 +58,9 @@ export const STEPS: Step[] = [
     plane: "control plane · DSP",
     color: C.cyan,
     blurb:
-      "The consumer's control plane requests the provider's DCAT catalog over DSP (or browses the aggregated federated catalog). It learns that data EXISTS — titles, classes, ODRL terms — but receives no payload. The catalogue layer decides what each BPN may even see.",
-    wire: "consumer CP → POST /v3/catalog/request (DSP)   ·   REED check → GET /reed/catalogue?bpn=…",
-    layer: "catalogue layer — discoverability by BPN + supply-chain graph",
+      "The consumer's control plane asks the provider for its catalog over DSP, presenting verifiable credentials (membership, certifications, supply relations) obtained from its IdentityHub. The provider's access policies decide which offers it may even see - metadata only, no payload.",
+    wire: "consumer CP → STS token + verifiable presentation → provider CP: POST /v3/catalog/request (DSP)",
+    layer: "catalogue layer - access policy per discoverability, evaluated on credentials",
   },
   {
     id: "negotiate",
@@ -69,7 +69,7 @@ export const STEPS: Step[] = [
     plane: "control plane ↔ control plane",
     color: C.amber,
     blurb:
-      "The two control planes run an asynchronous DSP contract negotiation. When it reaches FINALIZED, a contract agreement (ODRL, bound to the consumer's participant id) exists. This is the gate — the contract layer. No agreement → no data.",
+      "The two control planes run an asynchronous DSP contract negotiation. The provider evaluates its contract policy (e.g. role OEM, DNV certified) as CEL rules over the consumer's credentials. When it reaches FINALIZED, an agreement bound to the consumer's DID exists. No agreement, no data.",
     wire: "consumer CP → POST /v3/contractnegotiations   ·   poll GET /v3/contractnegotiations/{id} → state FINALIZED",
     layer: "contract layer — the EDC contract policy gates access",
   },
@@ -100,68 +100,9 @@ export const STEPS: Step[] = [
     plane: "data plane → REED backend",
     color: C.cyan,
     blurb:
-      "The consumer pulls with the EDR JWT. The provider data plane (http-pull-proxy) verifies the token, then fetches the confidential submodel from the REED backend (authenticated by X-Api-Key) and streams it back. Every pull writes an audit event — the usage layer.",
-    wire: "consumer → GET {edr.endpoint} Authorization: <jwt> → provider DP proxy → GET reed-backend /reed/submodels/{assetId} (X-Api-Key)",
+      "The consumer pulls with the EDR JWT. The provider data plane (http-pull-proxy) verifies the token, then fetches the confidential submodel from the REED backend with the owner's own key and streams it back. Every pull writes an audit event - the usage layer.",
+    wire: "consumer → GET {edr.endpoint} Authorization: <jwt> → provider DP proxy → GET reed-backend /reed/submodels/{assetId} (per-owner X-Api-Key)",
     layer: "usage layer — ODRL obligations + a PULL audit event on every access",
-  },
-];
-
-/* ---- REED supply-chain scenarios (the "why" behind a flow) -------------- */
-export interface Scenario {
-  id: string;
-  label: string;
-  consumer: string;
-  consumerBpn: string;
-  asset: string;
-  sensitivity: string;
-  outcome: "granted" | "denied";
-  story: string;
-}
-
-export const SCENARIOS: Scenario[] = [
-  {
-    id: "supplier",
-    label: "Supplier needs process capability",
-    consumer: "Tier-1 Supplier",
-    consumerBpn: "BPN-REED-SUP-0002",
-    asset: "process-capability-001",
-    sensitivity: "confidential",
-    outcome: "granted",
-    story:
-      "A tier-1 supplier must confirm it can machine a mating part to tolerance, so it needs the OEM's confidential process-capability data. Because it has a direct SUPPLIES relation, it can discover the bilateral offer, negotiate, and pull — every access logged.",
-  },
-  {
-    id: "sim",
-    label: "Simulation partner needs production status",
-    consumer: "Simulation Service",
-    consumerBpn: "BPN-REED-SIM-0003",
-    asset: "production-status-001",
-    sensitivity: "restricted",
-    outcome: "granted",
-    story:
-      "A simulation partner on the project needs live production status to schedule a distortion analysis on a bulky welded frame. Its project-scoped relationship makes the asset discoverable under a time-limited pilot policy — permitted, but bounded by an expiry and audited.",
-  },
-  {
-    id: "dpp",
-    label: "Partner reads the product passport",
-    consumer: "Consortium Member",
-    consumerBpn: "BPN-REED-SUP-0002",
-    asset: "digital-product-passport-001",
-    sensitivity: "consortium",
-    outcome: "granted",
-    story:
-      "Any consortium member may read the Digital Product Passport. It's consortium-visible and dpp-read-only — discoverable to all members, negotiable by all, but usage is read-only and audited.",
-  },
-  {
-    id: "outsider",
-    label: "Outsider is blocked",
-    consumer: "Outsider",
-    consumerBpn: "BPN-REED-OUT-9999",
-    asset: "process-capability-001",
-    sensitivity: "confidential",
-    outcome: "denied",
-    story:
-      "An outsider with no supply-chain relation tries to reach the same confidential data. The catalogue layer never even reveals the offer — discovery returns nothing, so there is no contract to negotiate and no payload to pull. Sovereignty enforced at step 1.",
   },
 ];
 
@@ -319,14 +260,23 @@ function Box({
 }
 
 /* ---- the diagram -------------------------------------------------------- */
+/** One side of the exchange as drawn in the diagram. */
+export interface Side {
+  title: string;
+  /** two-digit port prefix of the connector, e.g. "19" */
+  prefix: string;
+}
+
 export function Topology({
   active,
   interactive = true,
-  consumerLabel,
+  consumer = { title: "Consumer · Nordvind (OEM)", prefix: "19" },
+  provider = { title: "Provider · Castellum", prefix: "29" },
 }: {
   active?: StepId | null;
   interactive?: boolean;
-  consumerLabel?: string;
+  consumer?: Side;
+  provider?: Side;
 }) {
   const controlled = active !== undefined;
   const [idx, setIdx] = useState(-1);
@@ -342,7 +292,6 @@ export function Topology({
   const doneIdx = activeId ? STEPS.findIndex((s) => s.id === activeId) : -1;
   const activeStep = STEPS.find((s) => s.id === activeId) ?? null;
   const by = (id: StepId) => STEPS.find((s) => s.id === id)!;
-  const consumerTitle = consumerLabel ?? "CONSUMER · consumer-1 · BPN-REED-SUP-0002";
 
   return (
     <div className="topo">
@@ -355,21 +304,22 @@ export function Topology({
           ))}
         </defs>
 
-        {/* federated catalog */}
-        <Box x={420} y={24} w={200} h={58} title="Federated Catalog" sub=":39193 · aggregated cache" variant="fc" active={activeId === "publish" || activeId === "discover"} />
+        {/* federated catalog + identity */}
+        <Box x={420} y={24} w={200} h={58} title="Federated Catalog" sub=":39193 · crawls all members" variant="fc" active={activeId === "publish" || activeId === "discover"} />
+        <Box x={24} y={24} w={300} h={58} title="IdentityHub + Issuer" sub="DIDs · verifiable credentials · STS" variant="fc" active={activeId === "discover" || activeId === "negotiate"} />
 
         {/* consumer */}
-        <Box x={24} y={108} w={330} h={332} title={consumerTitle} variant="container" />
-        <Box x={48} y={150} w={282} h={108} title="Control Plane" sub="Management :29193 · DSP :29194" variant="cp" active={["discover", "negotiate", "transfer"].includes(activeId as string)} />
+        <Box x={24} y={108} w={330} h={332} title={consumer.title} variant="container" />
+        <Box x={48} y={150} w={282} h={108} title="Control Plane" sub={`Management :${consumer.prefix}193 · DSP :${consumer.prefix}194`} variant="cp" active={["discover", "negotiate", "transfer"].includes(activeId as string)} />
         <Box x={48} y={292} w={282} h={108} title="Data Plane" sub="EDR cache" variant="dp" active={["edr", "pull"].includes(activeId as string)} />
 
         {/* provider */}
-        <Box x={686} y={108} w={330} h={332} title="PROVIDER · reed-provider · BPN-REED-OEM-0001" variant="container" />
-        <Box x={710} y={150} w={282} h={108} title="Control Plane" sub="DSP :19194 · access + contract policy" variant="cp" active={["publish", "discover", "negotiate", "transfer"].includes(activeId as string)} />
-        <Box x={710} y={292} w={282} h={108} title="Data Plane" sub="http-pull-proxy :19291" variant="dp" active={["edr", "pull"].includes(activeId as string)} />
+        <Box x={686} y={108} w={330} h={332} title={provider.title} variant="container" />
+        <Box x={710} y={150} w={282} h={108} title="Control Plane" sub={`DSP :${provider.prefix}194 · CEL credential policies`} variant="cp" active={["publish", "discover", "negotiate", "transfer"].includes(activeId as string)} />
+        <Box x={710} y={292} w={282} h={108} title="Data Plane" sub={`http-pull-proxy :${provider.prefix}291`} variant="dp" active={["edr", "pull"].includes(activeId as string)} />
 
         {/* reed backend */}
-        <Box x={372} y={476} w={296} h={78} title="REED Backend" sub="submodel store · source of truth :8081" variant="backend" active={activeId === "publish" || activeId === "pull"} />
+        <Box x={372} y={476} w={296} h={78} title="REED Backend" sub="registry · matchmaking · submodels :8081" variant="backend" active={activeId === "publish" || activeId === "pull"} />
 
         {/* ---- flows ---- */}
         {/* publish: backend renders to provider CP, FC crawls provider CP */}
@@ -378,7 +328,7 @@ export function Topology({
 
         {/* discover: consumer CP -> provider CP (DSP catalog request) + FC -> consumer */}
         <Flow step={by("discover")} active={activeId} doneIdx={doneIdx} from={[330, 184]} to={[710, 184]} label="catalog request (DSP)" label2="metadata only" lx={520} ly={176} />
-        <Flow step={by("discover")} active={activeId} doneIdx={doneIdx} d="M 420 60 C 320 70 230 100 200 150" label="aggregated" lx={300} ly={96} anchor="end" />
+        <Flow step={by("discover")} active={activeId} doneIdx={doneIdx} d="M 300 82 C 300 110 300 130 300 150" label="credentials" lx={312} ly={100} anchor="start" />
 
         {/* negotiate: CP <-> CP */}
         <Flow step={by("negotiate")} active={activeId} doneIdx={doneIdx} from={[330, 212]} to={[710, 212]} bi label="contract negotiation → FINALIZED" lx={520} ly={228} />
@@ -398,7 +348,7 @@ export function Topology({
       <div className="topo-legend">
         <span className="lg"><i style={{ background: "rgba(51,225,196,0.5)" }} /> control plane</span>
         <span className="lg"><i style={{ background: "rgba(255,176,0,0.5)" }} /> data plane</span>
-        <span className="lg"><i style={{ background: "rgba(157,140,255,0.55)" }} /> federated catalog</span>
+        <span className="lg"><i style={{ background: "rgba(157,140,255,0.55)" }} /> catalog + identity services</span>
         <span className="lg"><i style={{ background: "rgba(255,122,51,0.55)" }} /> REED backend</span>
       </div>
 
@@ -453,7 +403,7 @@ export function Topology({
           </>
         ) : (
           <p className="muted">
-            {interactive ? "Press ▶ to walk the flow, or pick a step. " : "Run a negotiation to watch the flow light up. "}
+            {interactive ? "Press ▶ to walk the flow, or pick a step. " : "Request a supplier's detail to watch the flow light up. "}
             Each hop shows whether it happens on the <b>control plane</b> (discover / negotiate / transfer) or the <b>data plane</b> (EDR / pull) — and between which connector.
           </p>
         )}

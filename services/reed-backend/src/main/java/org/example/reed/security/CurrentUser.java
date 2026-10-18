@@ -38,9 +38,13 @@ public record CurrentUser(String username, String bpn, String participant, List<
         return has("admin");
     }
 
-    /** Admins and quality auditors may look at the dataspace from another member's point of view. */
+    /**
+     * Cross-organisation views ("what does BPN X see?", every RFQ's full ranking, the whole audit
+     * trail) are for the dataspace operator only: admins, or quality auditors not bound to a member
+     * organisation. A member's own quality auditor stays scoped to its organisation.
+     */
     public boolean canImpersonateView() {
-        return has("admin") || has("quality-auditor");
+        return isAdmin() || (has("quality-auditor") && (bpn == null || bpn.isBlank()));
     }
 
     public String requireBpn() {

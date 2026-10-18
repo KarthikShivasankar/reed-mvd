@@ -156,8 +156,8 @@
       "username": "reed-admin",
       "enabled": true,
       "emailVerified": true,
-      "firstName": "Reed",
-      "lastName": "(demo)",
+      "firstName": "Demo",
+      "lastName": "User",
       "email": "reed-admin@reed.example",
       "attributes": {},
       "credentials": [
@@ -177,8 +177,8 @@
       "username": "nordvind-buyer",
       "enabled": true,
       "emailVerified": true,
-      "firstName": "Nordvind",
-      "lastName": "(demo)",
+      "firstName": "Demo",
+      "lastName": "User",
       "email": "nordvind-buyer@reed.example",
       "attributes": {
         "bpn": [
@@ -204,8 +204,8 @@
       "username": "nordvind-quality",
       "enabled": true,
       "emailVerified": true,
-      "firstName": "Nordvind",
-      "lastName": "(demo)",
+      "firstName": "Demo",
+      "lastName": "User",
       "email": "nordvind-quality@reed.example",
       "attributes": {
         "bpn": [
@@ -231,8 +231,8 @@
       "username": "hanse-buyer",
       "enabled": true,
       "emailVerified": true,
-      "firstName": "Hanse",
-      "lastName": "(demo)",
+      "firstName": "Demo",
+      "lastName": "User",
       "email": "hanse-buyer@reed.example",
       "attributes": {
         "bpn": [
@@ -258,8 +258,8 @@
       "username": "castellum-engineer",
       "enabled": true,
       "emailVerified": true,
-      "firstName": "Castellum",
-      "lastName": "(demo)",
+      "firstName": "Demo",
+      "lastName": "User",
       "email": "castellum-engineer@reed.example",
       "attributes": {
         "bpn": [
@@ -285,8 +285,8 @@
       "username": "wisla-engineer",
       "enabled": true,
       "emailVerified": true,
-      "firstName": "Wisla",
-      "lastName": "(demo)",
+      "firstName": "Demo",
+      "lastName": "User",
       "email": "wisla-engineer@reed.example",
       "attributes": {
         "bpn": [
@@ -312,8 +312,8 @@
       "username": "maasvlakte-engineer",
       "enabled": true,
       "emailVerified": true,
-      "firstName": "Maasvlakte",
-      "lastName": "(demo)",
+      "firstName": "Demo",
+      "lastName": "User",
       "email": "maasvlakte-engineer@reed.example",
       "attributes": {
         "bpn": [
@@ -339,8 +339,8 @@
       "username": "rhein-auditor",
       "enabled": true,
       "emailVerified": true,
-      "firstName": "Rhein",
-      "lastName": "(demo)",
+      "firstName": "Demo",
+      "lastName": "User",
       "email": "rhein-auditor@reed.example",
       "attributes": {
         "bpn": [
@@ -367,8 +367,8 @@
       "username": "vagant-buyer",
       "enabled": true,
       "emailVerified": true,
-      "firstName": "Vagant",
-      "lastName": "(demo)",
+      "firstName": "Demo",
+      "lastName": "User",
       "email": "vagant-buyer@reed.example",
       "attributes": {
         "bpn": [

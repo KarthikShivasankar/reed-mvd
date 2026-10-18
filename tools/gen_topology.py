@@ -247,7 +247,8 @@ def user(username, roles, bpn=None, participant=None):
         attrs["participant"] = [participant]
     return {
         "username": username, "enabled": True, "emailVerified": True,
-        "firstName": username.split("-")[0].capitalize(), "lastName": "(demo)",
+        # Synthetic person data only - never a real name, never the company name.
+        "firstName": "Demo", "lastName": "User",
         "email": f"{username}@reed.example",
         "attributes": attrs,
         "credentials": [{"type": "password", "value": DS["demoPassword"], "temporary": False}],
@@ -409,7 +410,7 @@ IDENTITY_SERVICES = """
     environment:
       EDC_IH_API_SUPERUSER_KEY: ${IH_SUPERUSER_KEY}
       JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75
-    mem_limit: 768m
+    mem_limit: 1g
     volumes:
       - ./identityhub/config.properties:/app/config/config.properties:ro
     ports: ["7081:7081"]   # identity admin API (x-api-key), used by seed-identity.sh
@@ -431,7 +432,7 @@ IDENTITY_SERVICES = """
     environment:
       EDC_IH_API_SUPERUSER_KEY: ${IH_SUPERUSER_KEY}
       JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75
-    mem_limit: 768m
+    mem_limit: 1g
     volumes:
       - ./issuerservice/config.properties:/app/config/config.properties:ro
     ports: ["10013:10013", "10015:10015"]   # issuer admin + identity APIs (x-api-key)
@@ -459,7 +460,7 @@ def connector_service(p: dict) -> str:
 {deps}
     environment:
       JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75
-    mem_limit: 768m
+    mem_limit: 1g
     volumes:
       - ./{name}/config.properties:/app/config/config.properties:ro
     ports:
@@ -628,7 +629,7 @@ services:
         condition: service_completed_successfully
 {"      identityhub:" + chr(10) + "        condition: service_healthy" + chr(10) if MODE == "dcp" else ""}{"".join(f"      {c['connector']['name']}:{chr(10)}        condition: service_started{chr(10)}" for c in CONNECTORS)}    environment:
       JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75
-    mem_limit: 768m
+    mem_limit: 1g
     volumes:
       - ./federated-catalog/config.properties:/app/config/config.properties:ro
       - ./federated-catalog/participants.json:/app/config/participants.json:ro

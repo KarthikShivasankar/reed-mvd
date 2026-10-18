@@ -1,19 +1,65 @@
 {
   "reedBackendUrl": "http://localhost:8081",
-  "federatedCatalogUrl": "http://localhost:39193/management",
-  "consumerManagementUrl": "http://localhost:29193/management",
-  "provider": {
-    "id": "reed-provider",
-    "dspUrl": "http://reed-provider:19194/protocol/2025-1"
+  "keycloak": {
+    "url": "http://localhost:8180",
+    "realm": "reed",
+    "clientId": "reed-dashboard"
   },
+  "identityMode": "dcp",
   "connectors": [
-    { "name": "consumer-1", "managementUrl": "http://localhost:29193/management" },
-    { "name": "reed-provider", "managementUrl": "http://localhost:19193/management" }
-  ],
-  "bpns": [
-    { "bpn": "BPN-REED-SUP-0002", "label": "Supplier (consumer-1)" },
-    { "bpn": "BPN-REED-SIM-0003", "label": "Simulation service" },
-    { "bpn": "BPN-REED-OEM-0001", "label": "OEM (owner)" },
-    { "bpn": "BPN-REED-OUT-9999", "label": "Outsider (consortium only)" }
+    {
+      "name": "nordvind",
+      "bpn": "BPN-REED-OEM-0001",
+      "company": "Nordvind Energy Systems AS",
+      "short": "Nordvind",
+      "participantId": "did:web:identityhub%3A7083:nordvind",
+      "dspUrl": "http://nordvind:19194/protocol/2025-1",
+      "publicUrl": "http://localhost:19291/public/"
+    },
+    {
+      "name": "hanse",
+      "bpn": "BPN-REED-OEM-0002",
+      "company": "Hanse Marine & Rail GmbH",
+      "short": "Hanse",
+      "participantId": "did:web:identityhub%3A7083:hanse",
+      "dspUrl": "http://hanse:41194/protocol/2025-1",
+      "publicUrl": "http://localhost:41291/public/"
+    },
+    {
+      "name": "castellum",
+      "bpn": "BPN-REED-SUP-0002",
+      "company": "Castellum Fundición S.L.",
+      "short": "Castellum",
+      "participantId": "did:web:identityhub%3A7083:castellum",
+      "dspUrl": "http://castellum:29194/protocol/2025-1",
+      "publicUrl": "http://localhost:29291/public/"
+    },
+    {
+      "name": "wisla",
+      "bpn": "BPN-REED-SUP-0003",
+      "company": "Wisła Precision Machining Sp. z o.o.",
+      "short": "Wisła",
+      "participantId": "did:web:identityhub%3A7083:wisla",
+      "dspUrl": "http://wisla:42194/protocol/2025-1",
+      "publicUrl": "http://localhost:42291/public/"
+    },
+    {
+      "name": "maasvlakte",
+      "bpn": "BPN-REED-SUP-0004",
+      "company": "Maasvlakte Heavy Lift B.V.",
+      "short": "Maasvlakte",
+      "participantId": "did:web:identityhub%3A7083:maasvlakte",
+      "dspUrl": "http://maasvlakte:43194/protocol/2025-1",
+      "publicUrl": "http://localhost:43291/public/"
+    },
+    {
+      "name": "rhein-ndt",
+      "bpn": "BPN-REED-SUP-0005",
+      "company": "Rhein NDT Prüflabor GmbH",
+      "short": "Rhein NDT",
+      "participantId": "did:web:identityhub%3A7083:rhein-ndt",
+      "dspUrl": "http://rhein-ndt:44194/protocol/2025-1",
+      "publicUrl": "http://localhost:44291/public/"
+    }
   ]
 }

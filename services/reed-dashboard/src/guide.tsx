@@ -16,114 +16,144 @@ export interface TabHelp {
 
 export const TAB_HELP: Record<string, TabHelp> = {
   overview: {
-    role: "The map and control room of the data space — the single picture of how a payload moves from the OEM to a partner without losing sovereignty.",
+    role: "Your organisation's starting point in the REED data space: who you are, what is waiting for you, and how a sovereign exchange works.",
     contains: [
-      "Live counts: asset classes, policy templates, audit events, EDR-gated pulls.",
-      "An interactive topology diagram of both connectors (control plane + data plane), the federated catalog and the REED backend.",
-      "REED use-case scenarios you can RUN end-to-end against the live connectors.",
-      "A numbered guided path and a system-status panel.",
+      "Your organisation, role and the certifications the REED issuer has verified for it.",
+      "What needs your attention: open RFQs, matches to answer, opportunities.",
+      "The nine real-case scenarios across wind, offshore, rail / heavy machinery and hydropower.",
+      "The topology diagram: six connectors, the identity services, the federated catalog and the REED backend.",
     ],
-    usage: "Start here. Press ▶ to walk the six stages, then pick a use case and 'run this scenario live' to watch a real contract → EDR → pull (or a denial) light up the diagram.",
+    usage: "Start here. Open a scenario to see its ranked suppliers, or press ▶ on the diagram to walk the six stages of an exchange.",
+  },
+  marketplace: {
+    role: "The demand side: requests for quotation (RFQs) posted by OEMs for large industrial parts.",
+    contains: [
+      "Open and awarded RFQs from every member, with part size, mass, material and required certifications.",
+      "A form to post a new RFQ - buyers only - and an assistant that drafts it from plain text using a local model.",
+    ],
+    usage: "Buyers describe a part and post the RFQ; REED ranks suppliers immediately. Everyone else can browse what is in demand.",
+  },
+  matches: {
+    role: "Explainable matchmaking: which suppliers can make this part, why they rank where they do, and who was filtered out.",
+    contains: [
+      "Hard requirements (process, material, part size in any orientation, mass, tolerance, lead time, verified certifications) with the reason each supplier failed.",
+      "A weighted score for each qualified supplier: lead time, tolerance margin, logistics for bulky parts, track record, sector experience and embedded CO2.",
+      "Partner recommendations for steps the main supplier does not cover (NDT, heavy-lift, finish machining).",
+      "The match lifecycle: shortlist, the supplier accepts, an EDC contract for the supplier's confidential capability, then confirmation.",
+    ],
+    usage: "Shortlist the top supplier. Once it accepts, request its confidential process capability over EDC; REED checks the contract and the real figures before confirming the match.",
+    layer: "contract layer",
+  },
+  opportunities: {
+    role: "The supply side: RFQs your organisation qualifies for, and matches waiting for your answer.",
+    contains: [
+      "Open RFQs where you pass every hard requirement, with your own score - never your competitors'.",
+      "Shortlists from buyers that you can accept or decline.",
+    ],
+    usage: "Accepting a shortlist tells the buyer you want to quote; the buyer can then contract for your confidential capability.",
+  },
+  assistant: {
+    role: "A question-answering helper for matchmaking, running on a local model (Qwen3.8 via LiteLLM) inside the deployment.",
+    contains: [
+      "Chat that looks up RFQs, rankings and supplier profiles through read-only tools, as your organisation.",
+      "Scores and reasons always come from the REED scorer; the model only explains them.",
+    ],
+    usage: "Ask things like 'who can cast a 38 t hub with DNV approval?' or 'why was Śląsk rejected for R1?'. Personal data in your messages is removed before the model sees them.",
+  },
+  participants: {
+    role: "The member directory: every company in the data space, where it is, what it claims it can do, and what has been verified.",
+    contains: [
+      "Location, quay and rail access, sectors and role.",
+      "Verified certifications (issued as credentials) next to self-declared ones that do not count.",
+      "Each connector-running member's decentralized identifier (DID).",
+    ],
+    usage: "Use it to understand a match or rejection, or to see which members can already exchange data over EDC.",
   },
   matrix: {
-    role: "The governance rulebook for the data itself — how every asset class is classified before any sharing can happen (the 'classify' stage).",
+    role: "The governance rulebook for the data itself: how every asset class is classified before it can be shared.",
     contains: [
-      "The 8 REED asset classes (part digital twin, BoM, DPP, process capability, fixtures, production status, quality evidence, simulation result).",
-      "Each class's sensitivity (consortium → confidential → restricted → regulated) and discoverability (consortium / bilateral / project).",
-      "The default ODRL policy template applied to each class.",
+      "The 8 REED asset classes and each one's sensitivity and discoverability.",
+      "The default policy template per class.",
     ],
-    usage: "Reference. This matrix is the source of truth that the REED backend renders into the connector as offers + policies. Read it to understand why an asset is or isn't shareable to a given partner.",
+    usage: "Reference for why an asset is or is not shareable with a given partner.",
   },
   policies: {
-    role: "The terms a consumer agrees to — the faithful ODRL that encodes who may use an asset and under what conditions (the usage layer).",
+    role: "The terms a consumer agrees to: the ODRL policy per template.",
     contains: [
-      "The 6 policy templates: consortium-only, bilateral-supplier, dpp-read-only, oem-only, time-limited-pilot-access, simulation-service-only.",
-      "Each template's permissions, prohibitions (e.g. no redistribution), obligations (e.g. audit) and constraints (e.g. pilot expiry).",
+      "Permission constraints on verifiable credentials, e.g. MembershipCredential.role = OEM - enforced by every connector.",
+      "Prohibitions and obligations (no redistribution, audit, delete after expiry) - the usage layer REED records.",
     ],
-    usage: "Inspect before negotiating. Under iam-mock the connector's enforced policy is permissive; these are the constraints a production DCP/IdentityHub would enforce and that REED enforces itself via discoverability + audit.",
+    usage: "Read before negotiating to know which credentials a contract will ask for.",
     layer: "usage layer",
   },
   edc: {
-    role: "The live EDC view of discovery — exactly what a partner's connector crawls across the data space.",
+    role: "The EDC view of discovery: what the federated catalog crawled from every member's connector.",
     contains: [
-      "Datasets aggregated by the federated catalog crawler from every participant — metadata only, no payload.",
-      "Each dataset annotated with its REED asset class, sensitivity and discoverability.",
+      "Datasets per member - metadata only, no payload.",
+      "Only offers whose access policy the catalog operator's credentials satisfy (no bilateral assets).",
     ],
-    usage: "Confirm what is published at the EDC level. If a freshly seeded asset is missing, wait one crawl cycle (~15s) and refresh. This is the network-wide catalog behind the 'discover' stage.",
+    usage: "Confirm what is published network-wide. New assets appear within one crawl cycle (about 15 seconds).",
   },
   catalogue: {
-    role: "Discoverability by partner — proves the catalogue layer: a partner can only find what it is entitled to find.",
+    role: "Discoverability for your organisation: what you are allowed to find across all members.",
     contains: [
-      "The assets visible to a chosen Business Partner Number (BPN), driven by the supply-chain graph.",
-      "Each asset's sensitivity, discoverability, policy template and owner.",
+      "Assets visible to your organisation through the supply-chain graph, from every owner.",
+      "Sensitivity, discoverability, policy template and owner of each.",
     ],
-    usage: "Switch between Supplier, Simulation service and Outsider to watch bilateral/project assets appear and disappear. Each query is itself audited as a DISCOVER event. This is workflow step 1.",
+    usage: "Operators can switch to another member's point of view to show why bilateral or project assets stay hidden. Each query is audited.",
     step: 1,
     layer: "catalogue layer",
   },
-  negotiate: {
-    role: "Run the sovereign exchange — the interactive heart of the demo where a contract is negotiated and the confidential payload is pulled.",
-    contains: [
-      "The provider's live contract offers.",
-      "The shared topology diagram, driven LIVE as the flow runs.",
-      "A step-by-step trace and the retrieved confidential payload.",
-    ],
-    usage: "Pick an offer and click 'negotiate & pull'. Watch fetch offer → negotiate → FINALIZED → transfer → STARTED → EDR → pull payload. The payload is unreachable until the contract finalizes. This is workflow step 2.",
-    step: 2,
-    layer: "contract layer",
-  },
   transfers: {
-    role: "The connector's record of agreements and data flows — the EDC state behind the contract and transfer stages.",
+    role: "Your connector's record of agreements and data flows.",
     contains: [
-      "Contract negotiations with their DSP states (e.g. FINALIZED).",
-      "Transfer processes with their states (e.g. STARTED).",
+      "Contract negotiations with their states (FINALIZED, TERMINATED with the policy reason).",
+      "Transfer processes with their states (STARTED).",
     ],
-    usage: "After negotiating, confirm here that the negotiation reached FINALIZED and the transfer reached STARTED on the consumer connector. This is workflow step 3.",
-    step: 3,
+    usage: "Check that a contract finalised and the transfer started, or read why a provider refused it.",
+    step: 2,
   },
   audit: {
-    role: "The accountability record — the append-only proof that every access was governed and logged.",
+    role: "The accountability record: proof that every access was governed and logged.",
     contains: [
-      "Every CLASSIFY, DISCOVER, NEGOTIATE and PULL event, newest first.",
-      "Actor BPN, asset id, detail and timestamp; auto-refreshing every 3s.",
+      "Discovery, RFQ and match steps, assistant use, and every confidential payload pull.",
+      "Members see their own organisation's events; operators see everything.",
     ],
-    usage: "Verify the trail after running a scenario: a DISCOVER for the catalogue query and a PULL for the payload. This closes the loop — sovereignty plus traceability. This is workflow step 4.",
-    step: 4,
+    usage: "After a confirmed match you should see the RFQ, shortlist, acceptance, the PULL of the capability and the confirmation.",
+    step: 3,
     layer: "usage layer",
   },
 };
 
 /* ---- connectors, endpoints & protocols reference ----------------------- */
 export const PORT_ROLES: { suffix: string; path: string; ctx: string; caller: string; proto: string }[] = [
-  { suffix: "x191", path: "/api", ctx: "Default API", caller: "health / misc", proto: "HTTP" },
-  { suffix: "x192", path: "/control", ctx: "Data Plane Signaling", caller: "control plane (internal)", proto: "REST" },
-  { suffix: "x193", path: "/management", ctx: "Management API", caller: "dashboard · seed/run scripts", proto: "REST + JSON-LD" },
-  { suffix: "x194", path: "/protocol", ctx: "DSP (Dataspace Protocol)", caller: "other connectors · FC crawler", proto: "DSP / JSON-LD" },
-  { suffix: "x195", path: "/version", ctx: "Version API", caller: "tooling", proto: "HTTP" },
+  { suffix: "x193", path: "/management", ctx: "Management API (key-protected)", caller: "REED backend relay · seed/run scripts", proto: "REST + JSON-LD" },
+  { suffix: "x194", path: "/protocol", ctx: "DSP (Dataspace Protocol)", caller: "other connectors · FC crawler", proto: "DSP + VCs" },
   { suffix: "x291", path: "/public", ctx: "Data Plane Public (http-pull-proxy)", caller: "consumer pulling payload", proto: "HTTP + EDR JWT" },
+  { suffix: "x191/2/5", path: "/api /control /version", ctx: "Default, signaling, version", caller: "internal", proto: "HTTP" },
 ];
 
 export const COMM_MATRIX: { from: string; to: string; endpoint: string; proto: string; use: string }[] = [
-  { from: "browser", to: "consumer-1", endpoint: "29193 /management", proto: "Management", use: "drive the flow: catalog · negotiate · transfer · EDR" },
-  { from: "seed-reed.sh", to: "reed-provider", endpoint: "19193 /management", proto: "Management", use: "publish the 8 asset classes as offers" },
-  { from: "browser", to: "federated-catalog", endpoint: "39193 /management", proto: "Management", use: "catalogs/request — the EDC Catalog tab" },
-  { from: "browser", to: "reed-backend", endpoint: "8081 /reed/*", proto: "REST", use: "Overview · Matrix · Catalogue · Policies · Audit" },
-  { from: "consumer-1", to: "reed-provider", endpoint: "19194 /protocol/2025-1", proto: "DSP", use: "catalog request · negotiation · transfer start" },
-  { from: "reed-provider", to: "consumer-1", endpoint: "29194 /protocol/2025-1", proto: "DSP", use: "async DSP callbacks (state messages)" },
-  { from: "federated-catalog", to: "both connectors", endpoint: "x194 /protocol/2025-1", proto: "DSP", use: "periodic catalog crawl (~15s)" },
-  { from: "consumer side", to: "reed-provider DP", endpoint: "19291 /public", proto: "HTTP+JWT", use: "pull the confidential payload (EDR)" },
-  { from: "reed-provider DP", to: "reed-backend", endpoint: "reed-backend:8080 /reed/submodels", proto: "HTTP+X-Api-Key", use: "fetch the submodel the proxy streams back" },
-  { from: "control plane", to: "data plane", endpoint: "x192 /control", proto: "Signaling", use: "START/SUSPEND/TERMINATE · mint EDR" },
-  { from: "each connector", to: "vault", endpoint: "8200", proto: "Vault HTTP", use: "load EDR signing/verification keys (ES256)" },
-  { from: "reed-backend", to: "postgres", endpoint: "5432", proto: "JDBC", use: "persist the 5 REED tables" },
+  { from: "browser", to: "keycloak", endpoint: "8180 /realms/reed", proto: "OIDC", use: "log in (authorization code + PKCE)" },
+  { from: "browser", to: "reed-backend", endpoint: "8081 /reed/*", proto: "REST + JWT", use: "matchmaking, directory, catalogue, audit, assistant" },
+  { from: "reed-backend", to: "own connector", endpoint: "x193 /management", proto: "Management", use: "relay: catalog, negotiate, transfer, EDR (key server-side)" },
+  { from: "connector", to: "connector", endpoint: "x194 /protocol/2025-1", proto: "DSP", use: "catalog, negotiation, transfer - with verifiable presentations" },
+  { from: "connector", to: "identityhub", endpoint: "7084 /api/sts · 7082", proto: "DCP", use: "self-issued token, present credentials" },
+  { from: "connector", to: "identityhub", endpoint: "7083 /<name>/did.json", proto: "did:web", use: "resolve the counterparty's DID" },
+  { from: "identityhub", to: "issuerservice", endpoint: "10012 /api/issuance", proto: "DCP", use: "request credentials (membership, certification, relation)" },
+  { from: "issuerservice", to: "postgres reed", endpoint: "vc_* views", proto: "JDBC", use: "attestations from the REED registry" },
+  { from: "federated-catalog", to: "all connectors", endpoint: "x194 /protocol/2025-1", proto: "DSP", use: "crawl every 15 s with its own credentials" },
+  { from: "browser", to: "provider data plane", endpoint: "x291 /public", proto: "HTTP+JWT", use: "pull the confidential payload with the EDR" },
+  { from: "provider data plane", to: "reed-backend", endpoint: "8080 /reed/submodels", proto: "HTTP+key", use: "fetch the payload with the owner's own key" },
+  { from: "reed-backend", to: "litellm", endpoint: "4000 /v1", proto: "OpenAI API", use: "assistant → Qwen3.8 on Ollama / vLLM (local)" },
 ];
 
 const PROTO_LEGEND: { name: string; desc: string }[] = [
-  { name: "DSP", desc: "Dataspace Protocol — async JSON-LD between connectors (catalog, negotiation, transfer). Connectors never expose it to apps." },
-  { name: "Management", desc: "REST API to drive your OWN connector (publish, negotiate, read EDR). Never expose publicly." },
-  { name: "Signaling", desc: "Control plane → data plane control channel (collocated here)." },
-  { name: "Public DP", desc: "The payload door — present the EDR JWT, the provider data plane verifies & reverse-proxies to the backend." },
-  { name: "iam-mock", desc: "Stands in for DCP/Identity Hub — always-allow, no verifiable BPN, so EDC policies stay permissive." },
+  { name: "DSP", desc: "Dataspace Protocol - JSON-LD between connectors (catalog, negotiation, transfer)." },
+  { name: "DCP", desc: "Decentralized Claims Protocol - connectors prove membership, certifications and supply relations with verifiable credentials." },
+  { name: "Management", desc: "REST API to drive your own connector. Key-protected; the dashboard reaches it only through the REED backend." },
+  { name: "Public DP", desc: "The payload door - present the EDR JWT; the provider data plane verifies it and proxies to the backend." },
+  { name: "OIDC", desc: "Human login via Keycloak; the token carries the user's roles and organisation (BPN)." },
 ];
 
 export function NetworkReference() {
@@ -137,7 +167,7 @@ export function NetworkReference() {
       <div className="netref-body">
         <div className="netref-grid">
           <div>
-            <h4>Port convention <span className="faint">(1x=provider · 2x=consumer · 3x=FC)</span></h4>
+            <h4>Port convention <span className="faint">(19 Nordvind · 29 Castellum · 41 Hanse · 42 Wisła · 43 Maasvlakte · 44 Rhein NDT · 39 FC)</span></h4>
             <table className="grid mini">
               <thead><tr><th>Port</th><th>Path</th><th>Context</th><th>Called by</th><th>Protocol</th></tr></thead>
               <tbody>
@@ -177,7 +207,7 @@ export function NetworkReference() {
         </div>
         <p className="muted netref-note">
           <b>URL rule:</b> connector↔connector and provider-DP→backend use Docker <b>service names</b>
-          (<span className="mono">reed-provider:19194</span>); browser/script calls use <span className="mono">localhost</span>.
+          (<span className="mono">castellum:29194</span>); browser/script calls use <span className="mono">localhost</span>.
           Full reference: <span className="mono">docs/connectors-and-protocols.md</span>.
         </p>
       </div>

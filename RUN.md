@@ -1,146 +1,97 @@
 # Running REED locally
 
-This is the quick operational guide. For the architecture see `README.md` and
-`docs/reed-data-model.md`.
+Operational guide. Architecture: `README.md`, `docs/`.
 
 ## Prerequisites
 
-- **Docker** 20.10+ with Compose v2
-- `curl`, `jq`, `openssl`
-- **JDK 17** *(only if you build the jars on the host — see Option B if you don't have it)*
+- Docker with Compose v2, `curl`, `jq`, `openssl`, Python 3
+- JDK 17 on the host, **or** build inside Docker (Option B)
+- For the assistant: Ollama with `ollama pull qwen3.8` (listening on `0.0.0.0:11434` so containers
+  reach it via `host.docker.internal`), or an NVIDIA GPU for the vLLM profile. Without either, the
+  assistant answers from rules.
 
-## 0. One-time: generate the demo Vault keys
-
-The P-256 PEMs are gitignored. Generate them once before the first run:
-
-```bash
-mkdir -p deployment/vault/keys
-for p in reed-provider consumer-1; do
-  openssl ecparam -name prime256v1 -genkey -noout -out deployment/vault/keys/$p-signing-key.pem
-  openssl ec -in deployment/vault/keys/$p-signing-key.pem -pubout -out deployment/vault/keys/$p-verification-key.pem
-done
-```
-
-## 1. Build the jars
-
-Each Docker image copies a host-built jar, so the jars must exist before
-`docker compose build`.
-
-### Option A — you have JDK 17
+## 1. Generate the topology
 
 ```bash
-./gradlew :launchers:connector:shadowJar :launchers:federated-catalog:shadowJar :services:reed-backend:bootJar
+python3 tools/gen_topology.py
 ```
 
-### Option B — Docker only (no host JDK 17)
+Writes the compose file, connector/identity configs, the Keycloak realm, the dashboard config,
+EC P-256 keys under `deployment/vault/keys/` (gitignored) and **`deployment/.env`** with generated
+secrets (Management API keys, IdentityHub super-user key, submodel master key, LiteLLM key -
+gitignored, kept across runs). Re-run after every roster change; it is idempotent.
 
-Build the jars inside a JDK 17 container using the project's Gradle wrapper:
+## 2. Build the jars
+
+Option A - JDK 17 on the host:
 
 ```bash
-docker volume create reed-gradle-cache   # speeds up repeat builds
-docker run --rm -v "$PWD":/src -v reed-gradle-cache:/root/.gradle -w /src \
-  eclipse-temurin:17-jdk \
-  ./gradlew --no-daemon --console=plain \
-  :launchers:connector:shadowJar :launchers:federated-catalog:shadowJar :services:reed-backend:bootJar
+./gradlew :launchers:connector:shadowJar :launchers:federated-catalog:shadowJar \
+          :launchers:identity-hub:shadowJar :launchers:issuerservice:shadowJar \
+          :services:reed-backend:bootJar
 ```
 
-Produces `connector.jar`, `federated-catalog.jar`, and `reed-backend.jar` under
-each module's `build/libs/`.
-
-## 2. Bring up the stack
-
-Everything:
+Option B - Docker only:
 
 ```bash
-docker compose -f deployment/docker-compose.yml up --build -d
+docker run --rm -v "$PWD":/src -v reed-gradle-cache:/root/.gradle -w /src eclipse-temurin:17-jdk \
+  ./gradlew --no-daemon :launchers:connector:shadowJar :launchers:federated-catalog:shadowJar \
+  :launchers:identity-hub:shadowJar :launchers:issuerservice:shadowJar :services:reed-backend:bootJar
 ```
 
-The `dashboard` service is a React + Vite SPA that builds in seconds. To run
-just the **end-to-end data flow** (no UI), start the core services only:
+(Option B leaves root-owned `build/` directories; `sudo chown -R $USER .` before building on the
+host again.)
+
+## 3. Start and seed
 
 ```bash
-docker compose -f deployment/docker-compose.yml up --build -d \
-  vault init-vault postgres reed-backend reed-provider consumer-1 federated-catalog
+docker compose -f deployment/docker-compose.yml up --build -d     # add --profile vllm for the GPU backend
+./seed-identity.sh      # issuer, DIDs, credentials (all must reach ISSUED)
+./seed-reed.sh          # per-owner assets, policies, contract definitions, CEL rules
 ```
 
-Check health:
+Startup order is encoded in `depends_on`: Vault → keys → Postgres → Keycloak and backend →
+IdentityHub and Issuer Service → connectors → federated catalog.
+
+| URL | |
+|---|---|
+| http://localhost:8088 | dashboard (log in as `nordvind-buyer` / `reed-demo`, see README) |
+| http://localhost:8180 | Keycloak (admin console: `admin` / `admin`) |
+| http://localhost:8081/reed/health | backend health |
+| http://localhost:4000 | LiteLLM (key: `LITELLM_MASTER_KEY` in `deployment/.env`) |
+
+## 4. Verify
 
 ```bash
-docker compose -f deployment/docker-compose.yml ps
+./run-transfer.sh                         # EDC under DCP: 1 contract + pull, 2 refusals
+./run-matchmaking.sh                      # 9 scenarios; SCENARIO=R1 for one
+./gradlew :services:reed-backend:test     # scorer, fixtures, assistant guardrails
+cd services/reed-dashboard && npx playwright test   # UI end to end (npx playwright install chromium once)
 ```
 
-`postgres`, `vault`, `reed-backend`, `reed-provider` should report `healthy`.
+Each prints `PASS`/`FAIL` lines and exits non-zero on failure. `run-matchmaking.sh` creates new
+RFQs each run, so it can be repeated.
 
-## 3. Seed the provider from REED
+## Rebuilding one part
 
-```bash
-./seed-reed.sh
-```
-
-Renders the EDC assets/policies/contract-definitions from the REED
-classification matrix and pushes them to `reed-provider` (idempotent; 409 = ok).
-
-## 4. Run the end-to-end demo
-
-```bash
-./run-transfer.sh
-```
-
-Discovers the provider via the Federated Catalog, negotiates a contract for the
-confidential `process-capability-001` asset, pulls the payload through the EDR
-data plane, and prints the matching `PULL` audit event.
-
-## Useful endpoints
-
-```bash
-# Classification matrix
-curl -s http://localhost:8081/reed/classifications | jq
-
-# Catalogue layer — discoverability per partner BPN
-curl -s "http://localhost:8081/reed/catalogue?bpn=BPN-REED-SUP-0002" | jq   # supplier: consortium + bilateral
-curl -s "http://localhost:8081/reed/catalogue?bpn=BPN-REED-SIM-0003" | jq   # sim svc: consortium + project
-curl -s "http://localhost:8081/reed/catalogue?bpn=BPN-REED-OUT-9999" | jq   # outsider: consortium only
-
-# Audit log
-curl -s http://localhost:8081/reed/audit | jq
-
-# Inspect the REED tables directly
-docker exec mvd-postgres psql -U reed -d reed -c "\dt"
-docker exec mvd-postgres psql -U reed -d reed -c "select * from reed_asset_classification;"
-
-# Federated catalog (aggregated, metadata only)
-curl -s -X POST http://localhost:39193/management/v3/catalogs/request \
-  -H 'Content-Type: application/json' -d @deployment/requests/empty-query.json | jq
-
-# REED Dashboard (React SPA — browser)
-open http://localhost:8080
-```
-
-In the dashboard you can run the whole flow interactively from the **Negotiate**
-tab (pick an asset → *negotiate & pull*). For a guided tour of every tab and a
-manufacturing supply-chain walkthrough, see **`docs/dashboard-guide.md`**.
-
-The dashboard reads its endpoints at runtime from `deployment/dashboard/config.json`
-(bind-mounted to `/config.json`). To point it at different hosts/ports, edit that
-file and hard-refresh the browser — no rebuild needed.
-
-## Teardown
-
-```bash
-docker compose -f deployment/docker-compose.yml down -v
-```
-
-`-v` drops the Vault and Postgres volumes. Because the REED backend re-seeds its
-tables on startup and `seed-reed.sh` re-seeds the connector, a fresh
-`up` + `seed-reed.sh` restores everything.
+| Changed | Command |
+|---|---|
+| backend code | `./gradlew :services:reed-backend:bootJar && docker compose -f deployment/docker-compose.yml up --build -d reed-backend` |
+| dashboard | `docker compose -f deployment/docker-compose.yml up --build -d dashboard` |
+| connector / extension | rebuild the jar, `up --build -d <connectors>`, then `./seed-reed.sh` (stores are in memory) |
+| roster or scenarios | `python3 tools/gen_topology.py`, then `down -v`, `up --build -d`, both seed scripts |
+| LiteLLM routing | edit `deployment/litellm/config.yaml`, `docker compose ... restart litellm` |
 
 ## Troubleshooting
 
-- **Provider crashes on first transfer with `JWSSigner cannot be generated`** —
-  the Vault keys are missing/invalid. Redo step 0, then `down -v` and `up`.
-- **`seed-reed.sh` gets connection refused** — the provider or backend isn't up
-  yet; the script waits, but check `docker compose ps` and
-  `docker logs mvd-reed-backend`.
-- **Negotiation never reaches FINALIZED** — check `docker logs mvd-reed-provider`;
-  ensure the contract policies are permissive `Set` policies (they must be under
-  `iam-mock`; see `docs/reed-data-model.md`).
+- **A connector restarted** → its assets, policies and CEL rules are gone (in-memory): `./seed-reed.sh`.
+- **Vault restarted** → keys and credentials' secrets are gone (dev mode): `down -v` and start again.
+- **`seed-identity.sh` waits forever** → `docker logs reed-issuerservice`; the backend must be
+  healthy first (its migrations create the `vc_*` views the issuer reads).
+- **Catalog request returns 401 / empty** → the requester lacks a credential; check
+  `curl -H "x-api-key: $IH_SUPERUSER_KEY" localhost:7081/api/identity/v1alpha/participants/<name>/credentials`.
+- **Negotiation `TERMINATED`** → read `errorDetail` (Contracts tab shows it): it names the
+  constraint the requester's credentials did not satisfy.
+- **Dashboard shows an old version** → it is served with `Cache-Control: no-cache`; a hard
+  reload fixes browsers that cached it before that header existed.
+- **Assistant says "rules"** → `docker logs reed-litellm`; check `curl localhost:11434/api/tags` on the host.

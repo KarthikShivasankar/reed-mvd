@@ -1,4 +1,5 @@
-import type { AppConfig } from "./config";
+import type { AppConfig, ConnectorRef } from "./config";
+import type { Session } from "./auth";
 
 /* ----------------------------- REED types ------------------------------ */
 export interface Classification {
@@ -34,260 +35,404 @@ export interface AuditEvent {
   at: string;
 }
 
+export interface Capability {
+  summary: string;
+  processes: string[];
+  materials: string[];
+  envelopeMm: number[] | null;
+  maxMassKg: number | null;
+  bestTolMm: number | null;
+  leadTimeWeeks: number | null;
+  capacity: string | null;
+  co2KgPerKg: number | null;
+  claimedCerts: string[];
+}
+
+export interface Participant {
+  bpn: string;
+  name: string;
+  shortName: string;
+  role: string;
+  consortium: boolean;
+  country: string;
+  city: string;
+  vatId: string;
+  lat: number;
+  lon: number;
+  portAccess: boolean;
+  railAccess: boolean;
+  sectors: string[];
+  connectorName: string | null;
+  did: string | null;
+  dspUrl: string | null;
+  verifiedCerts: string[];
+  capability: Capability | null;
+}
+
+export interface Me {
+  username: string;
+  roles: string[];
+  organisation: Participant | null;
+}
+
+export interface Rfq {
+  id: string;
+  buyerBpn: string;
+  title: string;
+  story: string | null;
+  sector: string;
+  partFamily: string | null;
+  material: string | null;
+  dimsMm: number[];
+  massKg: number;
+  tolMm: number | null;
+  quantity: number;
+  dueDate: string;
+  deliveryLat: number | null;
+  deliveryLon: number | null;
+  requiredProcesses: string[];
+  requiredCerts: string[];
+  partnerProcesses: string[];
+  state: "OPEN" | "AWARDED" | "CLOSED";
+  createdAt: string;
+}
+
+export interface Criterion {
+  key: string;
+  label: string;
+  weight: number;
+  score: number;
+  contribution: number;
+  note: string;
+}
+
+export interface Rejection {
+  code: string;
+  detail: string;
+}
+
+export interface ScoreResult {
+  bpn: string;
+  name: string;
+  qualified: boolean;
+  score: number;
+  distanceKm: number;
+  trust: number;
+  breakdown: Criterion[];
+  rejections: Rejection[];
+}
+
+export interface RankedSupplier {
+  rank: number;
+  result: ScoreResult;
+  country: string;
+  city: string;
+  connectorName: string | null;
+  did: string | null;
+  summary: string | null;
+  verifiedCerts: string[];
+  claimedCerts: string[];
+  detailAssetId: string | null;
+  matchId: number | null;
+  state: string;
+}
+
+export interface PartnerRecommendation {
+  process: string;
+  candidates: RankedSupplier[];
+  visibleAssets: AssetMetadata[];
+}
+
+export interface Opportunity {
+  rfq: Rfq;
+  buyerName: string;
+  result: ScoreResult;
+  matchId: number | null;
+  state: string;
+}
+
+export interface MatchRecord {
+  id: number;
+  rfqId: string;
+  buyerBpn: string;
+  supplierBpn: string;
+  score: number;
+  state: string;
+  detailAssetId: string | null;
+  agreementId: string | null;
+  note: string | null;
+  onTime: boolean | null;
+  qualityOk: boolean | null;
+  updatedAt: string;
+}
+
+export interface RfqDraft {
+  title: string | null;
+  sector: string | null;
+  partFamily: string | null;
+  material: string | null;
+  dimsMm: number[] | null;
+  massKg: number | null;
+  tolMm: number | null;
+  quantity: number | null;
+  dueInWeeks: number | null;
+  requiredProcesses: string[];
+  requiredCerts: string[];
+  partnerProcesses: string[];
+}
+
+export interface DraftResponse {
+  draft: RfqDraft;
+  missing: string[];
+  source: "llm" | "rules";
+  model: string | null;
+  redactions: number;
+  /** the description with personal data removed - what gets stored as the RFQ story */
+  redactedText: string;
+}
+
+export interface Explanation {
+  summary: string;
+  perSupplier: { name: string; sentence: string }[];
+  risks: string[];
+  nextSteps: string[];
+  source: "llm" | "rules";
+  model: string | null;
+}
+
+export interface ChatReply {
+  reply: string;
+  toolsUsed: string[];
+  source: "llm" | "rules";
+  model: string | null;
+  redactions: number;
+}
+
+export interface ScenarioFile {
+  rfqs: { id: string; chain: string; buyer: string; title: string; story: string; expectedTop: string }[];
+}
+
+/** Error with the backend's own message, so the UI can say what went wrong. */
+export class ApiError extends Error {
+  constructor(public status: number, message: string) {
+    super(message);
+  }
+}
+
+const MGMT_CONTEXT = ["https://w3id.org/edc/connector/management/v2"];
+const QUERY = { "@context": { "@vocab": "https://w3id.org/edc/v0.0.1/ns/" }, "@type": "QuerySpec", offset: 0, limit: 50 };
+const DSP = "dataspace-protocol-http:2025-1";
+
 /* ----------------------------- REED client ----------------------------- */
+/**
+ * All calls go to the REED backend with the user's bearer token. EDC
+ * Management API calls are relayed by the backend (/reed/connectors/{name})
+ * which only lets users operate their own organisation's connector and adds
+ * the connector key server-side - the browser never holds one.
+ */
 export class Api {
-  constructor(private cfg: AppConfig) {}
+  constructor(private cfg: AppConfig, private session: Session) {}
 
-  private async get<T>(base: string, path: string): Promise<T> {
-    const res = await fetch(base + path);
-    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-    return res.json();
-  }
-
-  classifications() {
-    return this.get<Classification[]>(this.cfg.reedBackendUrl, "/reed/classifications");
-  }
-  policyTemplates() {
-    return this.get<PolicyTemplate[]>(this.cfg.reedBackendUrl, "/reed/policy-templates");
-  }
-  catalogue(bpn: string) {
-    return this.get<AssetMetadata[]>(
-      this.cfg.reedBackendUrl,
-      `/reed/catalogue?bpn=${encodeURIComponent(bpn)}`
-    );
-  }
-  audit() {
-    return this.get<AuditEvent[]>(this.cfg.reedBackendUrl, "/reed/audit");
-  }
-
-  /* ---- EDC: federated catalog (aggregated, metadata only) ---- */
-  async federatedCatalog(): Promise<any> {
-    const res = await fetch(this.cfg.federatedCatalogUrl + "/v3/catalogs/request", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      // The FC catalogs endpoint expects a QuerySpec, not just a context.
-      body: JSON.stringify({
-        "@context": { "@vocab": "https://w3id.org/edc/v0.0.1/ns/" },
-        "@type": "QuerySpec",
-        offset: 0,
-        limit: 50,
-      }),
-    });
-    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-    return res.json();
-  }
-
-  /* ---- EDC: the consumer's point-to-point catalog from the provider ---- */
-  async providerCatalog(): Promise<any> {
-    const res = await fetch(this.cfg.consumerManagementUrl + "/v3/catalog/request", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        "@context": { "@vocab": "https://w3id.org/edc/v0.0.1/ns/" },
-        counterPartyId: this.cfg.provider.id,
-        counterPartyAddress: this.cfg.provider.dspUrl,
-        protocol: "dataspace-protocol-http:2025-1",
-      }),
-    });
-    if (!res.ok) throw new Error(`catalog ${res.status} ${res.statusText}`);
-    return res.json();
-  }
-
-  private async post(path: string, body: unknown): Promise<any> {
-    const res = await fetch(this.cfg.consumerManagementUrl + path, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    if (!res.ok) throw new Error(`${path} ${res.status} ${res.statusText}`);
-    return res.json();
-  }
-  private async getJson(path: string): Promise<any> {
-    const res = await fetch(this.cfg.consumerManagementUrl + path);
-    if (!res.ok) throw new Error(`${path} ${res.status} ${res.statusText}`);
-    return res.json();
-  }
-
-  negotiate(offerId: string, assetId: string) {
-    return this.post("/v3/contractnegotiations", {
-      "@context": { "@vocab": "https://w3id.org/edc/v0.0.1/ns/" },
-      "@type": "ContractRequest",
-      counterPartyId: this.cfg.provider.id,
-      counterPartyAddress: this.cfg.provider.dspUrl,
-      protocol: "dataspace-protocol-http:2025-1",
-      policy: {
-        "@context": "http://www.w3.org/ns/odrl.jsonld",
-        "@id": offerId,
-        "@type": "Offer",
-        assigner: this.cfg.provider.id,
-        target: assetId,
-        permission: [],
-        prohibition: [],
-        obligation: [],
+  private async call<T>(method: string, path: string, body?: unknown): Promise<T> {
+    const res = await fetch(this.cfg.reedBackendUrl + path, {
+      method,
+      headers: {
+        Authorization: `Bearer ${await this.session.token()}`,
+        ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
       },
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+    const text = await res.text();
+    if (!res.ok) {
+      let msg = text;
+      try {
+        const j = JSON.parse(text);
+        msg = j.message || j.error || (Array.isArray(j) ? j[0]?.message : "") || text;
+      } catch {
+        /* plain text */
+      }
+      throw new ApiError(res.status, msg || `${res.status} ${res.statusText}`);
+    }
+    return (text ? JSON.parse(text) : null) as T;
+  }
+
+  /* ---- directory, model, audit ---- */
+  me() { return this.call<Me>("GET", "/reed/me"); }
+  participants() { return this.call<Participant[]>("GET", "/reed/participants"); }
+  classifications() { return this.call<Classification[]>("GET", "/reed/classifications"); }
+  policyTemplates() { return this.call<PolicyTemplate[]>("GET", "/reed/policy-templates"); }
+  catalogue(bpn?: string) {
+    return this.call<AssetMetadata[]>("GET", `/reed/catalogue${bpn ? `?bpn=${encodeURIComponent(bpn)}` : ""}`);
+  }
+  audit() { return this.call<AuditEvent[]>("GET", "/reed/audit"); }
+  scenarios() { return this.call<ScenarioFile>("GET", "/reed/scenarios"); }
+
+  /* ---- matchmaking ---- */
+  rfqs() { return this.call<Rfq[]>("GET", "/reed/rfqs"); }
+  rfq(id: string) { return this.call<Rfq>("GET", `/reed/rfqs/${id}`); }
+  createRfq(form: Record<string, unknown>) { return this.call<Rfq>("POST", "/reed/rfqs", form); }
+  matches(rfqId: string) { return this.call<RankedSupplier[]>("GET", `/reed/rfqs/${rfqId}/matches`); }
+  partners(rfqId: string) { return this.call<PartnerRecommendation[]>("GET", `/reed/rfqs/${rfqId}/partners`); }
+  opportunities() { return this.call<Opportunity[]>("GET", "/reed/opportunities"); }
+  myMatches() { return this.call<MatchRecord[]>("GET", "/reed/matches"); }
+  shortlist(rfqId: string, bpn: string) { return this.call<MatchRecord>("POST", `/reed/rfqs/${rfqId}/shortlist/${bpn}`); }
+  accept(id: number) { return this.call<MatchRecord>("POST", `/reed/matches/${id}/accept`); }
+  decline(id: number) { return this.call<MatchRecord>("POST", `/reed/matches/${id}/decline`); }
+  confirm(id: number, agreementId: string) { return this.call<MatchRecord>("POST", `/reed/matches/${id}/confirm`, { agreementId }); }
+  feedback(id: number, onTime: boolean, qualityOk: boolean) {
+    return this.call<MatchRecord>("POST", `/reed/matches/${id}/feedback`, { onTime, qualityOk });
+  }
+
+  /* ---- assistant (local LLM) ---- */
+  draftRfq(text: string) { return this.call<DraftResponse>("POST", "/reed/assistant/rfq-draft", { text }); }
+  explain(rfqId: string) { return this.call<Explanation>("POST", `/reed/assistant/explain/${rfqId}`); }
+  chat(messages: { role: string; content: string }[]) { return this.call<ChatReply>("POST", "/reed/assistant/chat", { messages }); }
+
+  /* ---- EDC via the backend relay ---- */
+  private mgmt<T = any>(connector: string, method: string, path: string, body?: unknown) {
+    return this.call<T>(method, `/reed/connectors/${connector}${path}`, body);
+  }
+  federatedCatalog() { return this.call<any[]>("POST", "/reed/federated-catalog/v3/catalogs/request", QUERY); }
+  catalogOf(consumer: string, provider: ConnectorRef) {
+    return this.mgmt(consumer, "POST", "/v3/catalog/request", {
+      "@context": MGMT_CONTEXT, "@type": "CatalogRequest",
+      counterPartyId: provider.participantId, counterPartyAddress: provider.dspUrl, protocol: DSP,
     });
   }
-  getNegotiation(id: string) {
-    return this.getJson(`/v3/contractnegotiations/${id}`);
-  }
-  transfer(agreementId: string, assetId: string) {
-    return this.post("/v3/transferprocesses", {
-      "@context": { "@vocab": "https://w3id.org/edc/v0.0.1/ns/" },
-      "@type": "TransferRequest",
-      counterPartyId: this.cfg.provider.id,
-      counterPartyAddress: this.cfg.provider.dspUrl,
-      protocol: "dataspace-protocol-http:2025-1",
-      contractId: agreementId,
-      assetId,
-      transferType: "HttpData-PULL",
+  negotiate(consumer: string, provider: ConnectorRef, offer: any, assetId: string) {
+    return this.mgmt(consumer, "POST", "/v3/contractnegotiations", {
+      "@context": MGMT_CONTEXT, "@type": "ContractRequest",
+      counterPartyAddress: provider.dspUrl, protocol: DSP,
+      // the offer exactly as the provider published it, bound to provider and asset
+      policy: { ...offer, assigner: provider.participantId, target: assetId },
     });
   }
-  getTransfer(id: string) {
-    return this.getJson(`/v3/transferprocesses/${id}`);
+  negotiation(consumer: string, id: string) { return this.mgmt(consumer, "GET", `/v3/contractnegotiations/${id}`); }
+  transfer(consumer: string, provider: ConnectorRef, agreementId: string) {
+    return this.mgmt(consumer, "POST", "/v3/transferprocesses", {
+      "@context": MGMT_CONTEXT, "@type": "TransferRequest",
+      counterPartyAddress: provider.dspUrl, protocol: DSP, contractId: agreementId, transferType: "HttpData-PULL",
+    });
   }
-  getEdr(transferId: string) {
-    return this.getJson(`/v3/edrs/${transferId}/dataaddress`);
+  transferProcess(consumer: string, id: string) { return this.mgmt(consumer, "GET", `/v3/transferprocesses/${id}`); }
+  edr(consumer: string, transferId: string) { return this.mgmt(consumer, "GET", `/v3/edrs/${transferId}/dataaddress`); }
+  list(consumer: string, kind: "contractnegotiations" | "transferprocesses") {
+    return this.mgmt<any[]>(consumer, "POST", `/v3/${kind}/request`, QUERY).then((j) => (Array.isArray(j) ? j : [j]));
   }
   async pull(endpoint: string, authorization: string): Promise<string> {
     const res = await fetch(endpoint, { headers: { Authorization: authorization } });
     const text = await res.text();
-    if (!res.ok) throw new Error(`pull ${res.status}: ${text.slice(0, 200)}`);
+    if (!res.ok) throw new Error(`data plane answered ${res.status}: ${text.slice(0, 200)}`);
     return text;
-  }
-
-  /* ---- EDC: connector contract negotiations / transfer processes ---- */
-  async list(connectorUrl: string, kind: "contractnegotiations" | "transferprocesses"): Promise<any[]> {
-    const res = await fetch(`${connectorUrl}/v3/${kind}/request`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      // A QuerySpec is required: a bare @context fails JSON-LD expansion (400).
-      body: JSON.stringify({
-        "@context": { "@vocab": "https://w3id.org/edc/v0.0.1/ns/" },
-        "@type": "QuerySpec",
-        offset: 0,
-        limit: 50,
-      }),
-    });
-    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-    const json = await res.json();
-    return Array.isArray(json) ? json : [json];
   }
 }
 
 /* --------------------- end-to-end REED flow runner --------------------- */
 /**
- * Runs the real REED sovereign-exchange flow against the live connectors,
- * exactly like run-transfer.sh: provider catalog → contract offer →
- * negotiation (→ FINALIZED) → HttpData-PULL transfer (→ STARTED) → EDR →
- * data-plane pull of the confidential payload. Shared by the Negotiate tab
- * and the Overview scenario runner so there is a single source of truth.
+ * The sovereign exchange, exactly like run-transfer.sh, from the user's own
+ * connector to a provider: catalog (with verifiable credentials) -> offer ->
+ * negotiation (-> FINALIZED) -> HttpData-PULL transfer (-> STARTED) -> EDR ->
+ * data-plane pull of the confidential payload.
  *
- * `stage` matches the FLOW labels: 0 fetch offer, 1 negotiate, 2 FINALIZED,
- * 3 transfer, 4 STARTED, 5 EDR, 6 pull payload.
+ * `stage`: 0 fetch offer, 1 negotiate, 2 FINALIZED, 3 transfer, 4 STARTED, 5 EDR, 6 payload.
  */
 export interface FlowCallbacks {
   onStage: (stage: number) => void;
   onLog?: (msg: string) => void;
 }
 
-const flowSleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+export interface FlowResult {
+  agreementId: string;
+  payload: string;
+}
 
-export async function runReedFlow(api: Api, assetId: string, cb: FlowCallbacks): Promise<string> {
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+export async function runReedFlow(api: Api, consumer: string, provider: ConnectorRef, assetId: string,
+                                  cb: FlowCallbacks): Promise<FlowResult> {
   const log = (m: string) => cb.onLog?.(m);
 
   cb.onStage(0);
-  const catalog = await api.providerCatalog();
-  const offerId = offerIdFor(catalog, assetId);
-  if (!offerId) throw new Error(`no contract offer found for ${assetId} — is it discoverable / seeded?`);
-  log(`◆ offer ${offerId.slice(0, 28)}…`);
+  const catalog = await api.catalogOf(consumer, provider);
+  const offer = offerFor(catalog, assetId);
+  if (!offer) {
+    throw new Error(`${provider.short} does not offer ${assetId} to you - your credentials do not satisfy its access policy, or it is not seeded`);
+  }
+  log(`Offer found in ${provider.short}'s catalog (your MembershipCredential was accepted)`);
 
   cb.onStage(1);
-  const neg = await api.negotiate(offerId, assetId);
-  const negId = neg["@id"] ?? neg.id;
-  log(`◆ negotiation ${negId}`);
+  const neg = await api.negotiate(consumer, provider, offer, assetId);
+  const negId = neg["@id"];
+  log(`Negotiation ${negId.slice(0, 8)} started`);
   let agreementId = "";
   for (let i = 0; i < 60; i++) {
-    const n = await api.getNegotiation(negId);
-    const st = val(n.state) ?? val(n["edc:state"]);
-    if (st === "FINALIZED") {
-      agreementId = val(n.contractAgreementId) ?? val(n["edc:contractAgreementId"]) ?? "";
+    const n = await api.negotiation(consumer, negId);
+    if (n.state === "FINALIZED") {
+      agreementId = n.contractAgreementId;
       break;
     }
-    await flowSleep(1500);
+    if (n.state === "TERMINATED") {
+      throw new Error(`${provider.short} refused the contract: ${policyReason(n.errorDetail)}`);
+    }
+    await sleep(1000);
   }
-  if (!agreementId) throw new Error("negotiation did not reach FINALIZED");
+  if (!agreementId) throw new Error("negotiation did not finish within a minute");
   cb.onStage(2);
-  log(`◆ agreement ${agreementId}`);
+  log(`Contract agreed (${agreementId.slice(0, 8)})`);
 
   cb.onStage(3);
-  const tp = await api.transfer(agreementId, assetId);
-  const tpId = tp["@id"] ?? tp.id;
-  log(`◆ transfer ${tpId}`);
+  const tp = await api.transfer(consumer, provider, agreementId);
+  const tpId = tp["@id"];
   for (let i = 0; i < 60; i++) {
-    const t = await api.getTransfer(tpId);
-    if ((val(t.state) ?? val(t["edc:state"])) === "STARTED") break;
-    await flowSleep(1500);
+    const t = await api.transferProcess(consumer, tpId);
+    if (t.state === "STARTED") break;
+    if (t.state === "TERMINATED") throw new Error(`transfer terminated: ${t.errorDetail ?? "no reason given"}`);
+    await sleep(1000);
   }
   cb.onStage(4);
+  log("Transfer started (HttpData-PULL)");
 
   let edr: any = null;
   for (let i = 0; i < 30; i++) {
     try {
-      edr = await api.getEdr(tpId);
-      if (edr) break;
+      edr = await api.edr(consumer, tpId);
+      if (edr?.endpoint) break;
     } catch {
-      /* not ready */
+      /* not issued yet */
     }
-    await flowSleep(1500);
+    await sleep(1000);
   }
-  const endpoint = val(edr?.endpoint) ?? val(edr?.["edc:endpoint"]);
-  const auth = val(edr?.authorization) ?? val(edr?.["edc:authorization"]);
-  if (!endpoint || !auth) throw new Error("EDR not issued in time");
+  if (!edr?.endpoint || !edr?.authorization) throw new Error("no endpoint data reference was issued");
   cb.onStage(5);
-  log(`◆ EDR endpoint ${endpoint}`);
+  log(`Access token received for ${edr.endpoint}`);
 
-  const data = await api.pull(endpoint, auth);
+  const payload = await api.pull(edr.endpoint, edr.authorization);
   cb.onStage(6);
-  log("◆ confidential payload received ✓");
-  return data;
+  log("Confidential payload received");
+  return { agreementId, payload };
+}
+
+/** Pulls the first readable sentence out of an EDC policy failure. */
+export function policyReason(detail?: string): string {
+  if (!detail) return "policy not fulfilled";
+  const m = detail.match(/Constraint '([^']+)' EQ '([^']+)'/);
+  return m ? `you need ${m[1]} = ${m[2]} (from a verifiable credential)` : detail.slice(0, 160);
 }
 
 /* ----------------------------- helpers --------------------------------- */
-export function flattenDatasets(catalog: any): any[] {
-  const out: any[] = [];
-  const visit = (node: any) => {
-    if (!node || typeof node !== "object") return;
-    if (Array.isArray(node)) return node.forEach(visit);
-    const type = node["@type"];
-    const isDataset = typeof type === "string" ? type.includes("Dataset") : Array.isArray(type) && type.some((t) => String(t).includes("Dataset"));
-    if (isDataset && node["@id"]) out.push(node);
-    Object.values(node).forEach(visit);
-  };
-  visit(catalog);
-  // de-dup by @id
-  const seen = new Set<string>();
-  return out.filter((d) => (seen.has(d["@id"]) ? false : (seen.add(d["@id"]), true)));
+export function datasetsOf(catalog: any): any[] {
+  const ds = catalog?.dataset ?? catalog?.["dcat:dataset"] ?? [];
+  return Array.isArray(ds) ? ds : [ds];
+}
+
+export function offerFor(catalog: any, assetId: string): any | null {
+  const ds = datasetsOf(catalog).find((d) => d["@id"] === assetId);
+  if (!ds) return null;
+  const p = ds.hasPolicy ?? ds["odrl:hasPolicy"];
+  return Array.isArray(p) ? p[0] : p ?? null;
 }
 
 export function prop(dataset: any, key: string): string | undefined {
-  return dataset?.[key] ?? dataset?.properties?.[key] ?? dataset?.[`reed:${key}`] ?? dataset?.[`https://w3id.org/edc/v0.0.1/ns/${key}`];
-}
-
-/** Find the contract-offer @id for a given asset id within a catalog (mirrors run-transfer.sh). */
-export function offerIdFor(catalog: any, assetId: string): string | null {
-  const datasets = flattenDatasets(catalog);
-  const ds = datasets.find((d) => (d["@id"] ?? d.id) === assetId);
-  if (!ds) return null;
-  let policy = ds["odrl:hasPolicy"] ?? ds["hasPolicy"];
-  if (Array.isArray(policy)) policy = policy[0];
-  return policy?.["@id"] ?? policy?.id ?? null;
-}
-
-/** Unwrap a possibly-namespaced scalar JSON-LD value. */
-export function val(v: any): string | undefined {
-  if (v == null) return undefined;
-  if (typeof v === "string") return v;
-  if (Array.isArray(v)) return val(v[0]);
-  if (typeof v === "object") return v["@value"] ?? v["@id"];
-  return String(v);
+  const v = dataset?.[`reed:${key}`] ?? dataset?.[key] ?? dataset?.properties?.[key];
+  return typeof v === "object" && v !== null ? v["@value"] ?? JSON.stringify(v) : v;
 }

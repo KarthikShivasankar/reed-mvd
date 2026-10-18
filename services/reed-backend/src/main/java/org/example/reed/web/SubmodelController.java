@@ -25,7 +25,7 @@ import java.nio.charset.StandardCharsets;
 
 /**
  * The REED <b>submodel service</b>: serves the confidential payload for an
- * asset. Only the owners' EDC data-plane proxies call it (with the static
+ * asset. Only the owners' EDC data-plane proxies call it (with the per-owner
  * {@code X-Api-Key} carried in the asset's data address), and only after the
  * consumer presented a valid EDR - i.e. after a contract was agreed. Every pull
  * is recorded as a {@code PULL} audit event (usage layer).
@@ -46,12 +46,12 @@ public class SubmodelController {
     @GetMapping(value = "/reed/submodels/{assetId}", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<String> submodel(@PathVariable String assetId,
                                            @RequestHeader(value = "X-Api-Key", required = false) String apiKey) {
-        if (apiKey == null || !MessageDigest.isEqual(apiKey.getBytes(StandardCharsets.UTF_8),
-                props.getApiKey().getBytes(StandardCharsets.UTF_8))) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "missing or invalid X-Api-Key");
+        var asset = assets.findById(assetId).orElse(null);
+        // Same answer for unknown assets and wrong keys, so the endpoint cannot be used to probe ids.
+        if (asset == null || apiKey == null || !MessageDigest.isEqual(apiKey.getBytes(StandardCharsets.UTF_8),
+                props.ownerKey(asset.ownerBpn).getBytes(StandardCharsets.UTF_8))) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "missing or invalid X-Api-Key for this asset's owner");
         }
-        var asset = assets.findById(assetId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "unknown asset " + assetId));
         audit.save(new AuditEvent(EventType.PULL, asset.ownerBpn, assetId,
                 "confidential payload of " + asset.ownerBpn + " pulled via EDR data plane"));
         return ResponseEntity.ok(asset.payload);

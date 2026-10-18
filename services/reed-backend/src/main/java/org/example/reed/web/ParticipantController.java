@@ -48,7 +48,10 @@ public class ParticipantController {
     @GetMapping("/reed/participants")
     public List<Entry> participants() {
         return participants.findAll().stream()
-                .sorted(Comparator.comparing((Participant p) -> p.connectorName == null).thenComparing(p -> p.bpn))
+                // members with a connector first, then the directory by name, non-members last
+                .sorted(Comparator.comparing((Participant p) -> !p.consortium)
+                        .thenComparing(p -> p.connectorName == null)
+                        .thenComparing(p -> p.name))
                 .map(this::entry).toList();
     }
 

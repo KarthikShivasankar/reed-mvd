@@ -173,7 +173,7 @@ services:
     environment:
       EDC_IH_API_SUPERUSER_KEY: ${IH_SUPERUSER_KEY}
       JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75
-    mem_limit: 768m
+    mem_limit: 1g
     volumes:
       - ./identityhub/config.properties:/app/config/config.properties:ro
     ports: ["7081:7081"]   # identity admin API (x-api-key), used by seed-identity.sh
@@ -195,7 +195,7 @@ services:
     environment:
       EDC_IH_API_SUPERUSER_KEY: ${IH_SUPERUSER_KEY}
       JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75
-    mem_limit: 768m
+    mem_limit: 1g
     volumes:
       - ./issuerservice/config.properties:/app/config/config.properties:ro
     ports: ["10013:10013", "10015:10015"]   # issuer admin + identity APIs (x-api-key)
@@ -215,7 +215,7 @@ services:
         condition: service_healthy
     environment:
       JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75
-    mem_limit: 768m
+    mem_limit: 1g
     volumes:
       - ./nordvind/config.properties:/app/config/config.properties:ro
     ports:
@@ -237,7 +237,7 @@ services:
         condition: service_healthy
     environment:
       JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75
-    mem_limit: 768m
+    mem_limit: 1g
     volumes:
       - ./hanse/config.properties:/app/config/config.properties:ro
     ports:
@@ -259,7 +259,7 @@ services:
         condition: service_healthy
     environment:
       JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75
-    mem_limit: 768m
+    mem_limit: 1g
     volumes:
       - ./castellum/config.properties:/app/config/config.properties:ro
     ports:
@@ -281,7 +281,7 @@ services:
         condition: service_healthy
     environment:
       JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75
-    mem_limit: 768m
+    mem_limit: 1g
     volumes:
       - ./wisla/config.properties:/app/config/config.properties:ro
     ports:
@@ -303,7 +303,7 @@ services:
         condition: service_healthy
     environment:
       JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75
-    mem_limit: 768m
+    mem_limit: 1g
     volumes:
       - ./maasvlakte/config.properties:/app/config/config.properties:ro
     ports:
@@ -325,7 +325,7 @@ services:
         condition: service_healthy
     environment:
       JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75
-    mem_limit: 768m
+    mem_limit: 1g
     volumes:
       - ./rhein-ndt/config.properties:/app/config/config.properties:ro
     ports:
@@ -357,7 +357,7 @@ services:
         condition: service_started
     environment:
       JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75
-    mem_limit: 768m
+    mem_limit: 1g
     volumes:
       - ./federated-catalog/config.properties:/app/config/config.properties:ro
       - ./federated-catalog/participants.json:/app/config/participants.json:ro

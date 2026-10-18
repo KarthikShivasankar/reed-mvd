@@ -76,3 +76,7 @@ vault/
 
 # Claude Code worktrees
 .claude/worktrees/
+
+# Playwright
+.playwright-mcp/
+playwright-report/

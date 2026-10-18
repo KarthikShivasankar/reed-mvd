@@ -6,6 +6,7 @@
 
 package org.example.reed.web;
 
+import org.example.reed.assistant.PersonalDataRedactor;
 import org.example.reed.domain.AuditEvent;
 import org.example.reed.domain.EventType;
 import org.example.reed.domain.MatchRecord;
@@ -103,8 +104,10 @@ public class MatchController {
         var r = new Rfq();
         r.id = "RFQ-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
         r.buyerBpn = bpn;
-        r.title = f.title();
-        r.story = f.story();
+        // RFQs are visible to every member: keep organisation and part data only (GDPR data minimisation).
+        var names = personNames(jwt);
+        r.title = PersonalDataRedactor.redact(f.title(), names).text();
+        r.story = f.story() == null ? null : PersonalDataRedactor.redact(f.story(), names).text();
         r.sector = f.sector();
         r.partFamily = f.partFamily();
         r.material = f.material();
@@ -201,6 +204,11 @@ public class MatchController {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "only the buyer's buyers or quality auditors give feedback");
         }
         return service.feedback(m, f.onTime(), f.qualityOk());
+    }
+
+    private static List<String> personNames(Jwt jwt) {
+        return java.util.stream.Stream.of("name", "preferred_username", "email")
+                .map(jwt::getClaimAsString).filter(java.util.Objects::nonNull).toList();
     }
 
     // ---------------------------------------------------------------- guards

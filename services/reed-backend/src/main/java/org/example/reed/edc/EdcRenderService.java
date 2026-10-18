@@ -113,9 +113,10 @@ public class EdcRenderService {
         dataAddress.put("baseUrl", props.getInternalUrl() + "/reed/submodels/" + a.assetId);
         dataAddress.put("proxyPath", "false");
         dataAddress.put("proxyQueryParams", "false");
-        // The provider's data-plane proxy presents this static header to the submodel service.
+        // The provider's data-plane proxy presents this header to the submodel service; the key is
+        // specific to the owner, so it never unlocks another participant's payloads.
         dataAddress.put("authKey", "X-Api-Key");
-        dataAddress.put("authCode", props.getApiKey());
+        dataAddress.put("authCode", props.ownerKey(a.ownerBpn));
 
         var asset = new LinkedHashMap<String, Object>();
         asset.put("@context", Map.of("@vocab", EDC_VOCAB));
