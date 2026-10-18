@@ -1,7 +1,11 @@
 /*
  * Connector launcher: a collocated control-plane + data-plane runtime.
- * Used by both the provider and the consumer; they differ only by
- * the config.properties mounted at runtime.
+ * Used by every participant; they differ only by the config.properties
+ * mounted at runtime.
+ *
+ * Identity: DCP (Decentralized Claims Protocol). The connector obtains
+ * self-issued ID tokens from the shared IdentityHub's STS and verifies
+ * counter-party Verifiable Presentations against trusted issuers.
  */
 
 plugins {
@@ -11,20 +15,22 @@ plugins {
 }
 
 dependencies {
-    // Everything needed to run a collocated CP+DP connector comes from these BOMs.
-    runtimeOnly(libs.edc.bom.controlplane.base)
+    // control-plane + DCP identity (did:web resolution, STS remote client, VC/VP verification)
+    runtimeOnly(libs.edc.bom.controlplane.dcp)
     runtimeOnly(libs.edc.bom.dataplane.base)
+
+    // Credential-constrained policies: CEL expressions over ctx.agent.claims.vc,
+    // registered at runtime via POST /management/v5beta/celexpressions (in-memory store).
+    runtimeOnly(libs.edc.cel.core)
+    runtimeOnly(libs.edc.cel.api.v5)
+    runtimeOnly(libs.edc.dcp.cel)
 
     // Consumer-side EDR query API (/management/v3/edrs/{tpId}/dataaddress)
     runtimeOnly(libs.edc.edr.cache.api)
 
-    // EDR cache API v4 (newer path)
     // Registers the HttpData endpoint generator + public pull-proxy controller.
     // Required because EDC 0.17.0 removed data-plane-public-api.
     runtimeOnly(project(":extensions:http-pull-proxy"))
-
-    // IAM mock (demo-only; replaces DCP/IdentityHub)
-    runtimeOnly(libs.edc.iam.mock)
 
     // Secret store
     runtimeOnly(libs.edc.vault.hashicorp)

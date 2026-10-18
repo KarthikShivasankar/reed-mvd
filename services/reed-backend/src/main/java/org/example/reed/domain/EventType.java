@@ -17,5 +17,9 @@ public enum EventType {
     /** a contract was negotiated (contract layer). */
     NEGOTIATE,
     /** a confidential payload was pulled (usage layer). */
-    PULL
+    PULL,
+    /** a matchmaking lifecycle step (RFQ posted, shortlist, accept, confirm, feedback). */
+    MATCH,
+    /** the LLM assistant was used (records redactions, never the prompt). */
+    ASSIST
 }

@@ -1,5 +1,7 @@
 server:
   port: 8080
+  error:
+    include-message: always
 
 spring:
   datasource:
@@ -8,15 +10,45 @@ spring:
     password: ${REED_DB_PASSWORD:reed}
   jpa:
     hibernate:
-      # Additive: REED tables are created/updated on startup, never dropped.
-      ddl-auto: update
-    properties:
-      hibernate:
-        format_sql: false
+      # Schema is owned by Flyway (db/migration); Hibernate only validates it.
+      ddl-auto: validate
     open-in-view: false
+  flyway:
+    # Adopt databases created by the pre-Flyway backend (tables use IF NOT EXISTS).
+    baseline-on-migrate: true
+    baseline-version: 0
 
 reed:
-  # Static key the EDC data-plane proxy presents (authCode) to pull submodel payloads.
+  # Static key the EDC data-plane proxies present (authCode) to pull submodel payloads.
   api-key: ${REED_API_KEY:reed-submodel-key}
-  # The provider BPN that owns the seeded assets (the OEM running this backend).
-  owner-bpn: ${REED_OWNER_BPN:BPN-REED-OEM-0001}
+  # roster.json + scenarios/matchmaking.json (bind-mounted from deployment/).
+  deployment-dir: ${REED_DEPLOYMENT_DIR:/app/deployment}
+  internal-url: ${REED_INTERNAL_URL:http://reed-backend:8080}
+  # dcp = credential-constrained EDC policies; mock = permissive (iam-mock connectors).
+  identity-mode: ${REED_IDENTITY_MODE:dcp}
+  did-pattern: ${REED_DID_PATTERN:did:web:identityhub%3A7083:{name}}
+  cors:
+    origins: ${REED_CORS_ORIGINS:http://localhost:8088}
+  security:
+    jwk-set-uri: ${REED_JWK_SET_URI:http://keycloak:8080/realms/reed/protocol/openid-connect/certs}
+    issuer: ${REED_ISSUER:http://localhost:8180/realms/reed}
+    audience: ${REED_AUDIENCE:reed-backend}
+  connectors:
+    # name=key pairs for each connector's Management API (generated into deployment/.secrets/.env).
+    keys: ${REED_MGMT_KEYS:}
+    federated-catalog-url: ${REED_FC_URL:http://federated-catalog:39193/management}
+  llm:
+    # Local OpenAI-compatible gateway (LiteLLM -> Ollama / vLLM serving Qwen3.8). Nothing leaves the deployment.
+    enabled: ${REED_LLM_ENABLED:true}
+    base-url: ${REED_LLM_BASE_URL:http://litellm:4000/v1}
+    api-key: ${REED_LLM_API_KEY:sk-reed-local}
+    model: ${REED_LLM_MODEL:reed-llm}
+    timeout-seconds: ${REED_LLM_TIMEOUT:90}
+  match:
+    weights:
+      lead: 0.20
+      tolerance: 0.15
+      logistics: 0.20
+      trust: 0.15
+      sector: 0.10
+      carbon: 0.20

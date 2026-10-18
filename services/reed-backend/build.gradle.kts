@@ -1,8 +1,10 @@
 /*
  * REED backend: a Spring Boot service that is the source of truth for the
- * REED data model. It persists the five REED tables in Postgres, serves the
- * confidential submodel payloads, and renders the EDC asset/policy/contract
- * payloads that seed-reed.sh pushes into the reed-provider connector.
+ * REED data model. It persists the REED tables in Postgres (Flyway-managed),
+ * serves the confidential submodel payloads, runs matchmaking and the local-LLM
+ * assistant, proxies the EDC Management APIs for logged-in users, and renders
+ * the EDC asset/policy/contract payloads that seed-reed.sh pushes into every
+ * participant's connector.
  *
  * This module is intentionally independent of the EDC BOMs used by the
  * connector/federated-catalog launchers - it only shares the Java 17 toolchain
@@ -18,7 +20,12 @@ plugins {
 dependencies {
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
+    implementation("org.springframework.boot:spring-boot-starter-oauth2-resource-server")
+    implementation("org.flywaydb:flyway-core")
+    implementation("org.flywaydb:flyway-database-postgresql")
     runtimeOnly(libs.postgresql)
+
+    testImplementation("org.springframework.boot:spring-boot-starter-test")
 }
 
 springBoot {
@@ -27,4 +34,10 @@ springBoot {
 
 tasks.bootJar {
     archiveFileName.set("reed-backend.jar")
+}
+
+tasks.test {
+    useJUnitPlatform()
+    // Scenario fixtures live in deployment/ (single source shared with the stack).
+    systemProperty("reed.deployment", rootProject.layout.projectDirectory.dir("deployment").asFile.absolutePath)
 }

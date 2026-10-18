@@ -73,3 +73,6 @@ coverage/
 # EDC runtime / local vault runtime data
 edc-runtime/
 vault/
+
+# Claude Code worktrees
+.claude/worktrees/

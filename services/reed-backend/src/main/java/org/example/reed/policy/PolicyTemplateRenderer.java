@@ -20,12 +20,11 @@ import java.time.temporal.ChronoUnit;
  * ({@code $REQUESTER_BPN}, {@code $OWNER_BPN}, {@code $ASSET_ID},
  * {@code $EXPIRY}).
  *
- * <p>This is the <em>faithful</em> REED policy across all three layers. Under
- * the demo's {@code iam-mock} the EDC connector cannot evaluate these BPN/time
- * constraints (no verifiable claims), so the connector receives a permissive
- * policy and REED enforces/records the real semantics. The rendered ODRL here
- * is what a production DCP/IdentityHub deployment would enforce, and is exposed
- * as asset metadata and via the REED APIs for transparency.
+ * <p>This is the <em>faithful</em> REED policy across all three layers. Its
+ * credential-backed permission constraints are what the EDC connectors enforce
+ * under DCP (see {@code EdcRenderService}); prohibitions, obligations and the
+ * expiry are the usage layer, exposed as the {@code reed:odrl} asset property
+ * and recorded in the REED audit trail.
  */
 @Component
 public class PolicyTemplateRenderer {

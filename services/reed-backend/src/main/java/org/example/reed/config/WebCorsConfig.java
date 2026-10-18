@@ -6,23 +6,31 @@
 
 package org.example.reed.config;
 
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.web.servlet.config.annotation.CorsRegistry;
-import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+
+import java.util.List;
 
 /**
- * Allows the browser-based REED dashboard (served from a different origin) to
- * call the {@code /reed/*} APIs. Demo-only: permissive like the EDC connectors'
- * CORS settings.
+ * Lets the browser-based REED dashboard call the {@code /reed/*} APIs with a
+ * bearer token. Origins are configurable ({@code reed.cors.origins}); the
+ * default only allows the dashboard's own origin.
  */
 @Configuration
-public class WebCorsConfig implements WebMvcConfigurer {
+public class WebCorsConfig {
 
-    @Override
-    public void addCorsMappings(CorsRegistry registry) {
-        registry.addMapping("/reed/**")
-                .allowedOrigins("*")
-                .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
-                .allowedHeaders("*");
+    @Bean
+    CorsConfigurationSource corsConfigurationSource(@Value("${reed.cors.origins}") List<String> origins) {
+        var cors = new CorsConfiguration();
+        cors.setAllowedOrigins(origins);
+        cors.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        cors.setAllowedHeaders(List.of("*"));
+        var source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/reed/**", cors);
+        return source;
     }
 }

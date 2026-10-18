@@ -7,9 +7,9 @@
 package org.example.reed.domain;
 
 /**
- * The eight REED asset classes. {@link #assetId()} is the deterministic id of
- * the single seeded sample instance per class, and {@link #submodelResource()}
- * is the classpath location of its confidential payload.
+ * The eight REED asset classes. Concrete assets ({@code reed_asset}) are
+ * instances of a class owned by one participant, e.g.
+ * {@code process-capability-castellum}.
  */
 public enum AssetClass {
     PartDigitalTwin("Part Digital Twin",
@@ -48,24 +48,5 @@ public enum AssetClass {
     /** kebab-case form used in ids and resource paths, e.g. "process-capability". */
     public String kebab() {
         return name().replaceAll("([a-z])([A-Z])", "$1-$2").toLowerCase();
-    }
-
-    /** Deterministic id of the seeded sample instance, e.g. "process-capability-001". */
-    public String assetId() {
-        return kebab() + "-001";
-    }
-
-    public String submodelResource() {
-        return "submodels/" + kebab() + ".json";
-    }
-
-    /** Resolve the asset class from a seeded instance id, e.g. "process-capability-001". */
-    public static AssetClass fromAssetId(String assetId) {
-        for (var c : values()) {
-            if (c.assetId().equals(assetId)) {
-                return c;
-            }
-        }
-        return null;
     }
 }

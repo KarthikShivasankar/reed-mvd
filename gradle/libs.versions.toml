@@ -12,9 +12,23 @@ edc-bom-controlplane-base     = { module = "org.eclipse.edc:controlplane-base-bo
 edc-bom-dataplane-base        = { module = "org.eclipse.edc:dataplane-base-bom", version.ref = "edc" }
 edc-bom-federatedcatalog-base = { module = "org.eclipse.edc:federatedcatalog-base-bom", version.ref = "edc" }
 
+# DCP (Decentralized Claims Protocol): connector + IdentityHub + IssuerService BOMs
+edc-bom-controlplane-dcp      = { module = "org.eclipse.edc:controlplane-dcp-bom", version.ref = "edc" }
+edc-bom-identityhub           = { module = "org.eclipse.edc:identityhub-bom", version.ref = "edc" }
+edc-bom-identityhub-sql       = { module = "org.eclipse.edc:identityhub-feature-sql-bom", version.ref = "edc" }
+edc-bom-issuerservice         = { module = "org.eclipse.edc:issuerservice-bom", version.ref = "edc" }
+edc-bom-issuerservice-sql     = { module = "org.eclipse.edc:issuerservice-feature-sql-bom", version.ref = "edc" }
+
+# CEL policy evaluation (expressions registered at runtime via /management/v5beta/celexpressions)
+edc-cel-core   = { module = "org.eclipse.edc:cel-core", version.ref = "edc" }
+edc-cel-api-v5 = { module = "org.eclipse.edc:cel-api-v5", version.ref = "edc" }
+edc-dcp-cel    = { module = "org.eclipse.edc:decentralized-claims-cel", version.ref = "edc" }
+
+# For the superuser-seed extension (IdentityHub / IssuerService admin bootstrap)
+edc-ih-spi = { module = "org.eclipse.edc:identity-hub-spi", version.ref = "edc" }
+
 # Overlays added on top of the BOMs
 edc-edr-cache-api   = { module = "org.eclipse.edc:edr-cache-api", version.ref = "edc" }
-edc-iam-mock        = { module = "org.eclipse.edc:iam-mock", version.ref = "edc" }
 edc-vault-hashicorp = { module = "org.eclipse.edc:vault-hashicorp", version.ref = "edc" }
 
 # For the static-node-directory extension

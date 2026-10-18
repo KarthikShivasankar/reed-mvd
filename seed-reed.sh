@@ -1,70 +1,42 @@
 #!/usr/bin/env bash
 #
-# Seeds the reed-provider connector from the REED backend.
+# Seeds every participant's EDC connector from the REED backend (idempotent; 409 = exists).
 #
-# REED is the source of truth: the backend renders the EDC assets, policy
-# definitions and contract definitions from its classification matrix + policy
-# templates, and this script pushes them into the connector's Management API.
-# Only metadata is published; the confidential payloads stay in the submodel
-# service until a contract is accepted.
+# REED is the source of truth: for each owner the backend renders assets, credential-constrained
+# policy definitions (access policy per discoverability + contract policy per template), contract
+# definitions, and the CEL expressions that bind the policy left operands to verifiable
+# credentials. Only metadata is published; confidential payloads stay in the submodel service
+# until a contract is agreed.
 #
-# Usage: ./seed-reed.sh
-#
+# Usage: ./seed-reed.sh     (after ./seed-identity.sh)
 set -euo pipefail
+LOG_TAG=seed
+source "$(dirname "$0")/tools/reed-lib.sh"
 
-PROVIDER_MGMT="${PROVIDER_MGMT:-http://localhost:19193/management}"
-REED_BACKEND="${REED_BACKEND:-http://localhost:8081}"
+wait_for "REED backend" "$REED_BACKEND/reed/health"
+wait_for "Keycloak" "$KEYCLOAK/realms/reed/.well-known/openid-configuration"
+ADMIN=$(token reed-admin)
 
-log() { printf '\n\033[1;34m[seed]\033[0m %s\n' "$*"; }
-
-log "waiting for REED backend at ${REED_BACKEND}"
-for i in $(seq 1 60); do
-  code=$(curl -s -o /dev/null -w '%{http_code}' "${REED_BACKEND}/reed/classifications" 2>/dev/null || echo 000)
-  [[ "$code" == "200" ]] && break
-  sleep 2
-done
-
-log "waiting for reed-provider management API at ${PROVIDER_MGMT}"
-for i in $(seq 1 60); do
-  code=$(curl -s -o /dev/null -w '%{http_code}' -X POST \
-           "${PROVIDER_MGMT}/v3/assets/request" \
-           -H 'Content-Type: application/json' -d '{}' 2>/dev/null || echo 000)
-  # any 2xx/4xx response means the server is listening
-  if [[ "$code" =~ ^[24] ]]; then
-    break
-  fi
-  sleep 2
-done
-
-# idempotent POST: 409 means "already exists", treat as success
-post() {
-  local url=$1 payload=$2
-  local code
-  code=$(curl -sS -o /tmp/seed-out.$$ -w '%{http_code}' -X POST "$url" \
-           -H 'Content-Type: application/json' -d "$payload")
-  if [[ "$code" == 2* ]]; then
-    jq -c '{"@id": (.["@id"] // .id)}' < /tmp/seed-out.$$ 2>/dev/null || cat /tmp/seed-out.$$
-  elif [[ "$code" == "409" ]]; then
-    echo "(already exists - skipping)"
-  else
-    echo "HTTP $code:"; cat /tmp/seed-out.$$; echo; return 1
-  fi
-  rm -f /tmp/seed-out.$$
+post() { # post <connector> <path> <json>
+  local out code
+  out=$(curl -sS -w '\n%{http_code}' -X POST "$(mgmt_url "$1")$2" -H "X-Api-Key: $(mgmt_key "$1")" \
+          -H 'Content-Type: application/json' -d "$3")
+  code=$(tail -n1 <<<"$out")
+  if [[ $code == 2* ]]; then printf '  %s %s\n' "$code" "$(jq -r '."@id" // .id // ""' <<<"$(sed '$d' <<<"$out")")"
+  elif [[ $code == 409 ]]; then echo "  409 (exists)"
+  else echo "  HTTP $code on $2: $(sed '$d' <<<"$out")" >&2; return 1; fi
 }
 
-# Pull each rendered EDC collection from the backend and POST every element.
-seed_kind() {
-  local kind=$1 mgmt_path=$2
-  log "seeding ${kind} (rendered from REED tables)"
-  local items
-  items=$(curl -fsS "${REED_BACKEND}/reed/edc/${kind}")
-  echo "$items" | jq -c '.[]' | while IFS= read -r item; do
-    post "${PROVIDER_MGMT}/v3/${mgmt_path}" "$item"
+render() { curl -fsS "$REED_BACKEND/reed/edc/$1" -H "Authorization: Bearer $ADMIN"; }
+
+for c in $(jq -r '.participants[] | select(.connector) | .connector.name' "$ROSTER"); do
+  owner=$(bpn_of "$c")
+  wait_for "connector $c" "$(mgmt_url "$c")/v3/assets/request" "X-Api-Key: $(mgmt_key "$c")"
+  log "$c ($owner): CEL expressions"
+  render celexpressions | jq -c '.[]' | while IFS= read -r item; do post "$c" /v5beta/celexpressions "$item"; done
+  for kind in assets policydefinitions contractdefinitions; do
+    log "$c ($owner): $kind"
+    render "$kind?owner=$owner" | jq -c '.[]' | while IFS= read -r item; do post "$c" "/v3/$kind" "$item"; done
   done
-}
-
-seed_kind assets             assets
-seed_kind policydefinitions  policydefinitions
-seed_kind contractdefinitions contractdefinitions
-
-log "seed complete - reed-provider now offers the 8 REED asset classes (metadata only)"
+done
+log "seed complete - every connector offers its owner's REED assets (metadata only)"

@@ -1,0 +1,381 @@
+{
+  "_comment": "Single source of truth for REED participants. Edit this file, then run `python3 tools/gen_topology.py`. All companies are FICTIONAL European companies placed in real EU/EEA industrial clusters; VAT ids are illustrative, not real registrations.",
+  "dataspace": {
+    "name": "REED",
+    "demoPassword": "reed-demo",
+    "identityMode": "dcp"
+  },
+  "participants": [
+    {
+      "bpn": "BPN-REED-OEM-0001",
+      "name": "Nordvind Energy Systems AS",
+      "short": "Nordvind",
+      "role": "OEM",
+      "country": "NO", "city": "Stavanger", "vatId": "NO 914 000 001 MVA",
+      "lat": 58.97, "lon": 5.73, "portAccess": true, "railAccess": false,
+      "sectors": ["wind", "hydro"],
+      "connector": { "name": "nordvind", "portPrefix": "19" },
+      "attestations": ["ISO9001", "ISO14001"],
+      "assets": ["PartDigitalTwin", "BillOfMaterial", "DigitalProductPassport", "FixtureHandlingStrategy", "ProductionStatus", "QualityEvidence", "SimulationResult"],
+      "users": [
+        { "username": "nordvind-buyer", "roles": ["buyer"] },
+        { "username": "nordvind-quality", "roles": ["quality-auditor"] }
+      ]
+    },
+    {
+      "bpn": "BPN-REED-OEM-0002",
+      "name": "Hanse Marine & Rail GmbH",
+      "short": "Hanse",
+      "role": "OEM",
+      "country": "DE", "city": "Kiel", "vatId": "DE 300 000 002",
+      "lat": 54.32, "lon": 10.14, "portAccess": true, "railAccess": true,
+      "sectors": ["offshore", "rail", "heavy-machinery"],
+      "connector": { "name": "hanse", "portPrefix": "41" },
+      "attestations": ["ISO9001", "DNV"],
+      "assets": ["PartDigitalTwin", "BillOfMaterial", "DigitalProductPassport", "QualityEvidence"],
+      "users": [
+        { "username": "hanse-buyer", "roles": ["buyer"] }
+      ]
+    },
+    {
+      "bpn": "BPN-REED-SUP-0002",
+      "name": "Castellum Fundición S.L.",
+      "short": "Castellum",
+      "role": "SUPPLIER",
+      "country": "ES", "city": "Bilbao", "vatId": "ESB00000002",
+      "lat": 43.26, "lon": -2.93, "portAccess": true, "railAccess": true,
+      "sectors": ["wind", "offshore", "hydro"],
+      "connector": { "name": "castellum", "portPrefix": "29" },
+      "attestations": ["ISO9001", "DNV", "PED"],
+      "relations": [{ "type": "SUPPLIES", "to": "BPN-REED-OEM-0001" }],
+      "capability": {
+        "summary": "Heavy sand casting of ductile iron, cast steel and martensitic stainless up to 60 t; in-house heat treatment and rough machining.",
+        "processes": ["sand-casting", "heat-treatment", "machining-milling"],
+        "materials": ["EN-GJS-400-18-LT", "G20Mn5", "GX4CrNi13-4"],
+        "envelopeMm": [7000, 7000, 4000],
+        "maxMassKg": 60000,
+        "bestTolMm": 1.0,
+        "leadTimeWeeks": 14,
+        "capacity": "MEDIUM",
+        "co2KgPerKg": 1.1,
+        "claimedCerts": ["ISO9001", "DNV", "PED"]
+      },
+      "confidentialCapability": {
+        "machines": ["Furan sand moulding line FL-7 (7 x 7 x 4 m flasks)", "Bogie-hearth furnace 90 t", "Gantry mill 8 x 4 m (rough)"],
+        "envelopeMm": [7000, 7000, 4000],
+        "maxMassKg": 60000,
+        "bestTolMm": 1.0,
+        "leadTimeWeeks": 14,
+        "freeCapacityTonnesPerMonth": 210,
+        "cpk": 1.41
+      },
+      "assets": ["ProcessCapability", "QualityEvidence", "ProductionStatus"],
+      "history": [
+        { "buyer": "BPN-REED-OEM-0001", "onTime": true, "qualityOk": true },
+        { "buyer": "BPN-REED-OEM-0001", "onTime": true, "qualityOk": true },
+        { "buyer": "BPN-REED-OEM-0002", "onTime": false, "qualityOk": true }
+      ],
+      "users": [{ "username": "castellum-engineer", "roles": ["supplier-engineer"] }]
+    },
+    {
+      "bpn": "BPN-REED-SUP-0003",
+      "name": "Wisła Precision Machining Sp. z o.o.",
+      "short": "Wisła",
+      "role": "SUPPLIER",
+      "country": "PL", "city": "Gdańsk", "vatId": "PL 5830000003",
+      "lat": 54.35, "lon": 18.65, "portAccess": true, "railAccess": true,
+      "sectors": ["wind", "offshore", "hydro", "rail"],
+      "connector": { "name": "wisla", "portPrefix": "42" },
+      "attestations": ["ISO9001", "DNV"],
+      "relations": [{ "type": "SUPPLIES", "to": "BPN-REED-OEM-0002" }],
+      "capability": {
+        "summary": "Large-part machining: vertical turning up to 8 m diameter, gantry milling 16 x 5 x 3 m, up to 80 t.",
+        "processes": ["machining-turning", "machining-milling"],
+        "materials": ["42CrMo4", "34CrNiMo6", "EN-GJS-400-18-LT", "S355J2", "GX4CrNi13-4", "G20Mn5"],
+        "envelopeMm": [16000, 8000, 3000],
+        "maxMassKg": 80000,
+        "bestTolMm": 0.02,
+        "leadTimeWeeks": 10,
+        "capacity": "MEDIUM",
+        "co2KgPerKg": 0.3,
+        "claimedCerts": ["ISO9001", "DNV"]
+      },
+      "confidentialCapability": {
+        "machines": ["VTL Ø8 m, 80 t table", "Gantry mill 16 x 5 x 3 m", "Laser tracker + CMM 6 x 3 x 2 m"],
+        "envelopeMm": [16000, 8000, 3000],
+        "maxMassKg": 80000,
+        "bestTolMm": 0.02,
+        "leadTimeWeeks": 10,
+        "freeCapacityHoursPerWeek": 120,
+        "cpk": 1.67
+      },
+      "assets": ["ProcessCapability", "QualityEvidence"],
+      "history": [
+        { "buyer": "BPN-REED-OEM-0002", "onTime": true, "qualityOk": true },
+        { "buyer": "BPN-REED-OEM-0002", "onTime": true, "qualityOk": true }
+      ],
+      "users": [{ "username": "wisla-engineer", "roles": ["supplier-engineer"] }]
+    },
+    {
+      "bpn": "BPN-REED-SUP-0004",
+      "name": "Maasvlakte Heavy Lift B.V.",
+      "short": "Maasvlakte",
+      "role": "SERVICE",
+      "country": "NL", "city": "Rotterdam", "vatId": "NL000000004B01",
+      "lat": 51.95, "lon": 4.05, "portAccess": true, "railAccess": true,
+      "sectors": ["wind", "offshore", "hydro", "rail", "heavy-machinery"],
+      "connector": { "name": "maasvlakte", "portPrefix": "43" },
+      "attestations": ["ISO9001", "DNV"],
+      "capability": {
+        "summary": "Heavy-lift and abnormal-load logistics: SPMT transport, load-out, sea-fastening for parts up to 2,000 t.",
+        "processes": ["heavy-lift", "load-out", "sea-fastening"],
+        "materials": [],
+        "envelopeMm": [60000, 30000, 20000],
+        "maxMassKg": 2000000,
+        "bestTolMm": null,
+        "leadTimeWeeks": 3,
+        "capacity": "HIGH",
+        "co2KgPerKg": null,
+        "claimedCerts": ["ISO9001", "DNV"]
+      },
+      "confidentialCapability": {
+        "fleet": ["48-axle-line SPMT", "Ringer crane 1,600 t", "Barge 120 m"],
+        "maxMassKg": 2000000,
+        "leadTimeWeeks": 3
+      },
+      "assets": ["ProcessCapability"],
+      "users": [{ "username": "maasvlakte-engineer", "roles": ["supplier-engineer"] }]
+    },
+    {
+      "bpn": "BPN-REED-SUP-0005",
+      "name": "Rhein NDT Prüflabor GmbH",
+      "short": "Rhein NDT",
+      "role": "SERVICE",
+      "country": "DE", "city": "Duisburg", "vatId": "DE 300 000 005",
+      "lat": 51.43, "lon": 6.76, "portAccess": true, "railAccess": true,
+      "sectors": ["wind", "offshore", "hydro", "rail", "heavy-machinery"],
+      "connector": { "name": "rhein-ndt", "portPrefix": "44" },
+      "attestations": ["ISO17025", "DNV"],
+      "relations": [{ "type": "SUPPLIES", "to": "BPN-REED-OEM-0002" }],
+      "capability": {
+        "summary": "Accredited non-destructive testing lab (ISO/IEC 17025): UT, PAUT, RT, MT, PT on site or in-house for parts up to 400 t.",
+        "processes": ["ndt-ut", "ndt-paut", "ndt-rt", "ndt-mt", "ndt-pt"],
+        "materials": [],
+        "envelopeMm": [30000, 10000, 8000],
+        "maxMassKg": 400000,
+        "bestTolMm": null,
+        "leadTimeWeeks": 2,
+        "capacity": "HIGH",
+        "co2KgPerKg": null,
+        "claimedCerts": ["ISO17025", "DNV"]
+      },
+      "confidentialCapability": {
+        "methods": ["UT/PAUT to EN ISO 16810", "RT Co-60 to EN ISO 17636", "MT to EN ISO 17638"],
+        "leadTimeWeeks": 2
+      },
+      "assets": ["ProcessCapability", "QualityEvidence"],
+      "users": [{ "username": "rhein-auditor", "roles": ["quality-auditor", "supplier-engineer"] }]
+    },
+    {
+      "bpn": "BPN-REED-SUP-0006",
+      "name": "Ebro Heavy Fabrication S.A.",
+      "short": "Ebro",
+      "role": "SUPPLIER",
+      "country": "ES", "city": "Zaragoza", "vatId": "ESA00000006",
+      "lat": 41.65, "lon": -0.88, "portAccess": false, "railAccess": true,
+      "sectors": ["rail", "heavy-machinery"],
+      "attestations": ["ISO9001", "EN1090-EXC3", "ISO3834-2", "EN15085-2"],
+      "capability": {
+        "summary": "Welded heavy structures in S355/S460 with stress relief and 5-axis milling; railway welding certified.",
+        "processes": ["welding", "machining-milling", "heat-treatment"],
+        "materials": ["S355J2", "S460NL", "S460ML"],
+        "envelopeMm": [15000, 5000, 4500],
+        "maxMassKg": 120000,
+        "bestTolMm": 0.1,
+        "leadTimeWeeks": 12,
+        "capacity": "MEDIUM",
+        "co2KgPerKg": 1.6,
+        "claimedCerts": ["ISO9001", "EN1090-EXC3", "ISO3834-2", "EN15085-2"]
+      },
+      "history": [{ "buyer": "BPN-REED-OEM-0002", "onTime": true, "qualityOk": true }],
+      "users": []
+    },
+    {
+      "bpn": "BPN-REED-SUP-0007",
+      "name": "Odense Steel Blocks ApS",
+      "short": "Odense",
+      "role": "SUPPLIER",
+      "country": "DK", "city": "Odense", "vatId": "DK 00000007",
+      "lat": 55.47, "lon": 10.42, "portAccess": true, "railAccess": true,
+      "sectors": ["offshore", "hydro", "wind"],
+      "attestations": ["DNV", "ISO3834-2", "EN1090-EXC3"],
+      "capability": {
+        "summary": "Hull-block and plate fabrication: blocks up to 20 x 16 x 10 m and 400 t, plate rolling up to 120 mm.",
+        "processes": ["welding", "hull-block-fabrication", "plate-rolling"],
+        "materials": ["AH36", "DH36", "S355J2", "S460ML", "S500ML"],
+        "envelopeMm": [20000, 16000, 10000],
+        "maxMassKg": 400000,
+        "bestTolMm": 2.0,
+        "leadTimeWeeks": 16,
+        "capacity": "HIGH",
+        "co2KgPerKg": 1.4,
+        "claimedCerts": ["DNV", "ISO3834-2", "EN1090-EXC3"]
+      },
+      "users": []
+    },
+    {
+      "bpn": "BPN-REED-SUP-0008",
+      "name": "Śląsk Odlewnia S.A.",
+      "short": "Śląsk",
+      "role": "SUPPLIER",
+      "country": "PL", "city": "Katowice", "vatId": "PL 6340000008",
+      "lat": 50.26, "lon": 19.02, "portAccess": false, "railAccess": true,
+      "sectors": ["wind", "heavy-machinery"],
+      "attestations": ["ISO9001"],
+      "capability": {
+        "summary": "Ductile-iron foundry for medium castings up to 35 t (cupola melt).",
+        "processes": ["sand-casting", "heat-treatment"],
+        "materials": ["EN-GJS-400-18-LT", "EN-GJS-500-7"],
+        "envelopeMm": [5000, 5000, 3000],
+        "maxMassKg": 35000,
+        "bestTolMm": 1.5,
+        "leadTimeWeeks": 10,
+        "capacity": "MEDIUM",
+        "co2KgPerKg": 2.1,
+        "claimedCerts": ["ISO9001", "DNV"]
+      },
+      "history": [{ "buyer": "BPN-REED-OEM-0001", "onTime": false, "qualityOk": false }],
+      "users": []
+    },
+    {
+      "bpn": "BPN-REED-SUP-0009",
+      "name": "Sachsen Großteilbearbeitung GmbH",
+      "short": "Sachsen",
+      "role": "SUPPLIER",
+      "country": "DE", "city": "Chemnitz", "vatId": "DE 300 000 009",
+      "lat": 50.83, "lon": 12.92, "portAccess": false, "railAccess": true,
+      "sectors": ["rail", "heavy-machinery"],
+      "attestations": ["ISO9001", "EN15085-2", "ISO3834-2"],
+      "capability": {
+        "summary": "Welding and machining of rail and machine-building structures up to 40 t; VTL up to 5 m diameter.",
+        "processes": ["welding", "machining-milling", "machining-turning"],
+        "materials": ["S355J2", "S460NL", "42CrMo4"],
+        "envelopeMm": [8000, 5000, 5000],
+        "maxMassKg": 40000,
+        "bestTolMm": 0.05,
+        "leadTimeWeeks": 8,
+        "capacity": "HIGH",
+        "co2KgPerKg": 1.2,
+        "claimedCerts": ["ISO9001", "EN15085-2", "ISO3834-2"]
+      },
+      "users": []
+    },
+    {
+      "bpn": "BPN-REED-SUP-0010",
+      "name": "Acciaierie Tirrene S.p.A.",
+      "short": "Tirrene",
+      "role": "SUPPLIER",
+      "country": "IT", "city": "Piombino", "vatId": "IT 00000000010",
+      "lat": 42.93, "lon": 10.53, "portAccess": true, "railAccess": true,
+      "sectors": ["offshore", "wind", "hydro"],
+      "attestations": ["ISO9001", "DNV", "ISO14001"],
+      "capability": {
+        "summary": "EAF steel and open-die forging of shafts and rings up to 150 t, quench & temper, finish turning.",
+        "processes": ["open-die-forging", "heat-treatment", "machining-turning"],
+        "materials": ["34CrNiMo6", "42CrMo4", "18CrNiMo7-6"],
+        "envelopeMm": [22000, 3000, 3000],
+        "maxMassKg": 150000,
+        "bestTolMm": 0.05,
+        "leadTimeWeeks": 20,
+        "capacity": "MEDIUM",
+        "co2KgPerKg": 0.9,
+        "claimedCerts": ["ISO9001", "DNV", "ISO14001"]
+      },
+      "users": []
+    },
+    {
+      "bpn": "BPN-REED-SUP-0011",
+      "name": "Plzeň Heavy Engineering a.s.",
+      "short": "Plzeň",
+      "role": "SUPPLIER",
+      "country": "CZ", "city": "Plzeň", "vatId": "CZ00000011",
+      "lat": 49.74, "lon": 13.37, "portAccess": false, "railAccess": true,
+      "sectors": ["hydro", "rail", "heavy-machinery"],
+      "attestations": ["ISO9001", "ISO3834-2"],
+      "capability": {
+        "summary": "Heavy machining and welding for hydro and machine building; VTL up to 7 m diameter, 100 t.",
+        "processes": ["machining-turning", "machining-milling", "welding"],
+        "materials": ["GX4CrNi13-4", "G20Mn5", "S355J2", "42CrMo4"],
+        "envelopeMm": [7000, 7000, 4000],
+        "maxMassKg": 100000,
+        "bestTolMm": 0.03,
+        "leadTimeWeeks": 12,
+        "capacity": "MEDIUM",
+        "co2KgPerKg": 0.5,
+        "claimedCerts": ["ISO9001", "ISO3834-2"]
+      },
+      "users": []
+    },
+    {
+      "bpn": "BPN-REED-SUP-0012",
+      "name": "Atlantique Chaudronnerie SAS",
+      "short": "Atlantique",
+      "role": "SUPPLIER",
+      "country": "FR", "city": "Saint-Nazaire", "vatId": "FR 00 000000012",
+      "lat": 47.27, "lon": -2.21, "portAccess": true, "railAccess": true,
+      "sectors": ["offshore", "hydro"],
+      "attestations": ["ISO9001", "DNV", "EN1090-EXC4", "ISO3834-2"],
+      "capability": {
+        "summary": "Offshore jackets, transition pieces and penstocks: plate rolling to 150 mm, welding of S355-S690.",
+        "processes": ["welding", "plate-rolling", "jacket-fabrication"],
+        "materials": ["S355J2", "S460ML", "S500ML", "S690QL"],
+        "envelopeMm": [40000, 12000, 12000],
+        "maxMassKg": 800000,
+        "bestTolMm": 1.0,
+        "leadTimeWeeks": 18,
+        "capacity": "MEDIUM",
+        "co2KgPerKg": 1.3,
+        "claimedCerts": ["ISO9001", "DNV", "EN1090-EXC4", "ISO3834-2"]
+      },
+      "users": []
+    },
+    {
+      "bpn": "BPN-REED-SIM-0003",
+      "name": "Aachen Process Simulation GmbH",
+      "short": "Aachen Sim",
+      "role": "SERVICE",
+      "country": "DE", "city": "Aachen", "vatId": "DE 300 000 003",
+      "lat": 50.78, "lon": 6.08, "portAccess": false, "railAccess": true,
+      "sectors": ["wind", "hydro"],
+      "attestations": ["ISO9001"],
+      "relations": [{ "type": "PROJECT_MEMBER", "to": "BPN-REED-OEM-0001" }],
+      "users": []
+    },
+    {
+      "bpn": "BPN-REED-OPERATOR",
+      "name": "REED Dataspace Operator",
+      "short": "Operator",
+      "role": "SERVICE",
+      "country": "NO", "city": "Trondheim", "vatId": "NO 914 000 000 MVA",
+      "lat": 63.43, "lon": 10.40, "portAccess": false, "railAccess": true,
+      "sectors": [],
+      "identity": "federated-catalog",
+      "_identityComment": "Runs the federated catalog; holds a DID + MembershipCredential so it may crawl member catalogs.",
+      "attestations": [],
+      "users": []
+    },
+    {
+      "bpn": "BPN-REED-OUT-9999",
+      "name": "Vagant Components Ltd",
+      "short": "Vagant",
+      "role": "SUPPLIER",
+      "consortium": false,
+      "country": "MT", "city": "Valletta", "vatId": "MT 00009999",
+      "lat": 35.90, "lon": 14.51, "portAccess": true, "railAccess": false,
+      "sectors": ["wind"],
+      "attestations": [],
+      "users": [{ "username": "vagant-buyer", "roles": ["buyer"] }]
+    }
+  ],
+  "adminUsers": [{ "username": "reed-admin", "roles": ["admin", "quality-auditor"] }]
+}

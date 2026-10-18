@@ -1,0 +1,27 @@
+# Local LLM gateway for the REED assistant. The backend only ever talks to the
+# OpenAI-compatible alias `reed-llm`; LiteLLM routes it to Qwen3.8 served by
+# Ollama on the host (default) and falls back to vLLM (compose profile "vllm").
+# Nothing is sent outside the deployment.
+model_list:
+  - model_name: reed-llm
+    litellm_params:
+      model: ollama_chat/qwen3.8:latest
+      api_base: http://host.docker.internal:11434
+      think: false            # answers, not chain-of-thought (structured output + tool calls)
+      keep_alive: 30m
+  - model_name: reed-llm-vllm
+    litellm_params:
+      model: hosted_vllm/qwen3.8
+      api_base: http://vllm:8000/v1
+      extra_body:
+        chat_template_kwargs: { enable_thinking: false }
+
+router_settings:
+  fallbacks:
+    - reed-llm: ["reed-llm-vllm"]
+    - reed-llm-vllm: ["reed-llm"]
+  num_retries: 1
+  timeout: 120
+
+litellm_settings:
+  drop_params: true

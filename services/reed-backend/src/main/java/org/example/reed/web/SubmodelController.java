@@ -7,11 +7,10 @@
 package org.example.reed.web;
 
 import org.example.reed.config.ReedProperties;
-import org.example.reed.domain.AssetClass;
 import org.example.reed.domain.AuditEvent;
 import org.example.reed.domain.EventType;
+import org.example.reed.repo.AssetRepository;
 import org.example.reed.repo.AuditEventRepository;
-import org.springframework.core.io.ClassPathResource;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -21,52 +20,40 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.io.IOException;
+import java.security.MessageDigest;
 import java.nio.charset.StandardCharsets;
 
 /**
  * The REED <b>submodel service</b>: serves the confidential payload for an
- * asset. This is the endpoint the provider's data-plane proxy pulls from once a
- * consumer presents a valid EDR - i.e. only after a contract is accepted. Every
- * pull is recorded as a {@code PULL} audit event (usage layer).
+ * asset. Only the owners' EDC data-plane proxies call it (with the static
+ * {@code X-Api-Key} carried in the asset's data address), and only after the
+ * consumer presented a valid EDR - i.e. after a contract was agreed. Every pull
+ * is recorded as a {@code PULL} audit event (usage layer).
  */
 @RestController
 public class SubmodelController {
 
     private final ReedProperties props;
+    private final AssetRepository assets;
     private final AuditEventRepository audit;
 
-    public SubmodelController(ReedProperties props, AuditEventRepository audit) {
+    public SubmodelController(ReedProperties props, AssetRepository assets, AuditEventRepository audit) {
         this.props = props;
+        this.assets = assets;
         this.audit = audit;
     }
 
     @GetMapping(value = "/reed/submodels/{assetId}", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<String> submodel(@PathVariable String assetId,
-                                           @RequestHeader(value = "X-Api-Key", required = false) String apiKey,
-                                           @RequestHeader(value = "X-Reed-Bpn", required = false) String requesterBpn) {
-        if (apiKey == null || !apiKey.equals(props.getApiKey())) {
+                                           @RequestHeader(value = "X-Api-Key", required = false) String apiKey) {
+        if (apiKey == null || !MessageDigest.isEqual(apiKey.getBytes(StandardCharsets.UTF_8),
+                props.getApiKey().getBytes(StandardCharsets.UTF_8))) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "missing or invalid X-Api-Key");
         }
-        var assetClass = AssetClass.fromAssetId(assetId);
-        if (assetClass == null) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "unknown asset " + assetId);
-        }
-        var payload = readResource(assetClass);
-
-        audit.save(new AuditEvent(EventType.PULL, requesterBpn, assetId,
-                "confidential payload pulled via EDR data-plane"));
-
-        return ResponseEntity.ok(payload);
-    }
-
-    private String readResource(AssetClass assetClass) {
-        var resource = new ClassPathResource(assetClass.submodelResource());
-        try (var in = resource.getInputStream()) {
-            return new String(in.readAllBytes(), StandardCharsets.UTF_8);
-        } catch (IOException e) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
-                    "payload missing for " + assetClass, e);
-        }
+        var asset = assets.findById(assetId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "unknown asset " + assetId));
+        audit.save(new AuditEvent(EventType.PULL, asset.ownerBpn, assetId,
+                "confidential payload of " + asset.ownerBpn + " pulled via EDR data plane"));
+        return ResponseEntity.ok(asset.payload);
     }
 }

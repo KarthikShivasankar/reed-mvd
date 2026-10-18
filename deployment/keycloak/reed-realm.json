@@ -1,0 +1,404 @@
+{
+  "realm": "reed",
+  "enabled": true,
+  "displayName": "REED Manufacturing Data Space",
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": false,
+  "accessTokenLifespan": 900,
+  "ssoSessionIdleTimeout": 3600,
+  "roles": {
+    "realm": [
+      {
+        "name": "buyer",
+        "description": "Posts RFQs, shortlists and confirms matches for its organisation"
+      },
+      {
+        "name": "supplier-engineer",
+        "description": "Answers matches and opportunities for its organisation"
+      },
+      {
+        "name": "quality-auditor",
+        "description": "Reads audit trail and gives delivery feedback"
+      },
+      {
+        "name": "admin",
+        "description": "Dataspace operator (seeding, all views)"
+      }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "reed-dashboard",
+      "name": "REED Dashboard",
+      "publicClient": true,
+      "enabled": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "redirectUris": [
+        "http://localhost:8088/*"
+      ],
+      "webOrigins": [
+        "http://localhost:8088"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:8088/*"
+      },
+      "protocolMappers": [
+        {
+          "name": "bpn",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "config": {
+            "user.attribute": "bpn",
+            "claim.name": "bpn",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        },
+        {
+          "name": "participant",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "config": {
+            "user.attribute": "participant",
+            "claim.name": "participant",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        },
+        {
+          "name": "reed-backend-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "reed-backend",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "basic",
+        "profile",
+        "email",
+        "roles",
+        "web-origins"
+      ]
+    },
+    {
+      "clientId": "reed-cli",
+      "name": "REED scripts (password grant, demo only)",
+      "publicClient": true,
+      "enabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "protocolMappers": [
+        {
+          "name": "bpn",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "config": {
+            "user.attribute": "bpn",
+            "claim.name": "bpn",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        },
+        {
+          "name": "participant",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "config": {
+            "user.attribute": "participant",
+            "claim.name": "participant",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        },
+        {
+          "name": "reed-backend-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "reed-backend",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "basic",
+        "profile",
+        "email",
+        "roles"
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "reed-admin",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Reed",
+      "lastName": "(demo)",
+      "email": "reed-admin@reed.example",
+      "attributes": {},
+      "credentials": [
+        {
+          "type": "password",
+          "value": "reed-demo",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "admin",
+        "quality-auditor"
+      ],
+      "requiredActions": []
+    },
+    {
+      "username": "nordvind-buyer",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Nordvind",
+      "lastName": "(demo)",
+      "email": "nordvind-buyer@reed.example",
+      "attributes": {
+        "bpn": [
+          "BPN-REED-OEM-0001"
+        ],
+        "participant": [
+          "nordvind"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "reed-demo",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "buyer"
+      ],
+      "requiredActions": []
+    },
+    {
+      "username": "nordvind-quality",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Nordvind",
+      "lastName": "(demo)",
+      "email": "nordvind-quality@reed.example",
+      "attributes": {
+        "bpn": [
+          "BPN-REED-OEM-0001"
+        ],
+        "participant": [
+          "nordvind"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "reed-demo",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "quality-auditor"
+      ],
+      "requiredActions": []
+    },
+    {
+      "username": "hanse-buyer",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Hanse",
+      "lastName": "(demo)",
+      "email": "hanse-buyer@reed.example",
+      "attributes": {
+        "bpn": [
+          "BPN-REED-OEM-0002"
+        ],
+        "participant": [
+          "hanse"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "reed-demo",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "buyer"
+      ],
+      "requiredActions": []
+    },
+    {
+      "username": "castellum-engineer",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Castellum",
+      "lastName": "(demo)",
+      "email": "castellum-engineer@reed.example",
+      "attributes": {
+        "bpn": [
+          "BPN-REED-SUP-0002"
+        ],
+        "participant": [
+          "castellum"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "reed-demo",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "supplier-engineer"
+      ],
+      "requiredActions": []
+    },
+    {
+      "username": "wisla-engineer",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Wisla",
+      "lastName": "(demo)",
+      "email": "wisla-engineer@reed.example",
+      "attributes": {
+        "bpn": [
+          "BPN-REED-SUP-0003"
+        ],
+        "participant": [
+          "wisla"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "reed-demo",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "supplier-engineer"
+      ],
+      "requiredActions": []
+    },
+    {
+      "username": "maasvlakte-engineer",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Maasvlakte",
+      "lastName": "(demo)",
+      "email": "maasvlakte-engineer@reed.example",
+      "attributes": {
+        "bpn": [
+          "BPN-REED-SUP-0004"
+        ],
+        "participant": [
+          "maasvlakte"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "reed-demo",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "supplier-engineer"
+      ],
+      "requiredActions": []
+    },
+    {
+      "username": "rhein-auditor",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Rhein",
+      "lastName": "(demo)",
+      "email": "rhein-auditor@reed.example",
+      "attributes": {
+        "bpn": [
+          "BPN-REED-SUP-0005"
+        ],
+        "participant": [
+          "rhein-ndt"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "reed-demo",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "quality-auditor",
+        "supplier-engineer"
+      ],
+      "requiredActions": []
+    },
+    {
+      "username": "vagant-buyer",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Vagant",
+      "lastName": "(demo)",
+      "email": "vagant-buyer@reed.example",
+      "attributes": {
+        "bpn": [
+          "BPN-REED-OUT-9999"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "reed-demo",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "buyer"
+      ],
+      "requiredActions": []
+    }
+  ],
+  "components": {
+    "org.keycloak.userprofile.UserProfileProvider": [
+      {
+        "providerId": "declarative-user-profile",
+        "subComponents": {},
+        "config": {
+          "kc.user.profile.config": [
+            "{\"unmanagedAttributePolicy\": \"ADMIN_VIEW\", \"attributes\": [{\"name\": \"username\", \"displayName\": \"${username}\", \"validations\": {\"length\": {\"min\": 3, \"max\": 255}}, \"permissions\": {\"view\": [\"admin\", \"user\"], \"edit\": [\"admin\"]}, \"multivalued\": false}, {\"name\": \"email\", \"displayName\": \"${email}\", \"validations\": {\"email\": {}}, \"permissions\": {\"view\": [\"admin\", \"user\"], \"edit\": [\"admin\"]}, \"multivalued\": false}, {\"name\": \"firstName\", \"displayName\": \"${firstName}\", \"permissions\": {\"view\": [\"admin\", \"user\"], \"edit\": [\"admin\"]}, \"multivalued\": false}, {\"name\": \"lastName\", \"displayName\": \"${lastName}\", \"permissions\": {\"view\": [\"admin\", \"user\"], \"edit\": [\"admin\"]}, \"multivalued\": false}, {\"name\": \"bpn\", \"displayName\": \"Business Partner Number\", \"permissions\": {\"view\": [\"admin\", \"user\"], \"edit\": [\"admin\"]}, \"multivalued\": false}, {\"name\": \"participant\", \"displayName\": \"Dataspace connector\", \"permissions\": {\"view\": [\"admin\", \"user\"], \"edit\": [\"admin\"]}, \"multivalued\": false}], \"groups\": []}"
+          ]
+        }
+      }
+    ]
+  }
+}

@@ -13,5 +13,5 @@ import java.util.List;
 
 public interface AuditEventRepository extends JpaRepository<AuditEvent, Long> {
 
-    List<AuditEvent> findAllByOrderByAtDesc();
+    List<AuditEvent> findTop500ByOrderByAtDesc();
 }

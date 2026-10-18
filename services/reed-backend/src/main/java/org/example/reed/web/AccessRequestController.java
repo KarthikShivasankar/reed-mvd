@@ -7,13 +7,16 @@
 package org.example.reed.web;
 
 import org.example.reed.domain.AccessRequest;
-import org.example.reed.domain.AssetClass;
 import org.example.reed.domain.AuditEvent;
 import org.example.reed.domain.EventType;
 import org.example.reed.domain.RequestState;
 import org.example.reed.repo.AccessRequestRepository;
+import org.example.reed.repo.AssetRepository;
 import org.example.reed.repo.AuditEventRepository;
+import org.example.reed.security.CurrentUser;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -26,40 +29,44 @@ import java.util.List;
 
 /**
  * Records partner access requests (the bridge between catalogue discovery and
- * contract negotiation). Each new request is logged as a {@code REQUEST} audit
- * event.
+ * contract negotiation). The requester is the caller's organisation from the
+ * token - never a field in the request body.
  */
 @RestController
 @RequestMapping("/reed/access-requests")
 public class AccessRequestController {
 
     private final AccessRequestRepository requests;
+    private final AssetRepository assets;
     private final AuditEventRepository audit;
 
-    public AccessRequestController(AccessRequestRepository requests, AuditEventRepository audit) {
+    public AccessRequestController(AccessRequestRepository requests, AssetRepository assets,
+                                   AuditEventRepository audit) {
         this.requests = requests;
+        this.assets = assets;
         this.audit = audit;
     }
 
-    public record Form(String requesterBpn, String assetId, String reason) {
+    public record Form(String assetId, String reason) {
     }
 
     @GetMapping
-    public List<AccessRequest> list() {
-        return requests.findAll();
+    public List<AccessRequest> list(@AuthenticationPrincipal Jwt jwt) {
+        var user = CurrentUser.of(jwt);
+        var all = requests.findAll();
+        return user.canImpersonateView() ? all
+                : all.stream().filter(r -> r.requesterBpn.equals(user.bpn())).toList();
     }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public AccessRequest create(@RequestBody Form form) {
-        var assetClass = AssetClass.fromAssetId(form.assetId());
-        if (assetClass == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "unknown asset " + form.assetId());
-        }
-        var saved = requests.save(new AccessRequest(form.requesterBpn(), form.assetId(),
-                assetClass, RequestState.REQUESTED, form.reason()));
-        audit.save(new AuditEvent(EventType.REQUEST, form.requesterBpn(), form.assetId(),
-                "access requested: " + form.reason()));
+    public AccessRequest create(@AuthenticationPrincipal Jwt jwt, @RequestBody Form form) {
+        var bpn = CurrentUser.of(jwt).requireBpn();
+        var asset = assets.findById(form.assetId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "unknown asset " + form.assetId()));
+        var saved = requests.save(new AccessRequest(bpn, asset.assetId, asset.assetClass,
+                RequestState.REQUESTED, form.reason()));
+        audit.save(new AuditEvent(EventType.REQUEST, bpn, asset.assetId, "access requested: " + form.reason()));
         return saved;
     }
 }

@@ -14,11 +14,17 @@ import org.springframework.stereotype.Component;
 @ConfigurationProperties(prefix = "reed")
 public class ReedProperties {
 
-    /** Static key the EDC data-plane proxy presents to pull submodel payloads. */
+    /** Static key the EDC data-plane proxies present to pull submodel payloads. */
     private String apiKey = "reed-submodel-key";
 
-    /** BPN of the provider that owns the seeded assets (the OEM). */
-    private String ownerBpn = "BPN-REED-OEM-0001";
+    /** Directory holding roster.json and scenarios/matchmaking.json. */
+    private String deploymentDir = "/app/deployment";
+
+    /** In-cluster base URL of this backend (used in rendered EDC data addresses). */
+    private String internalUrl = "http://reed-backend:8080";
+
+    /** {@code mock} (iam-mock, permissive EDC policies) or {@code dcp} (credential-constrained policies). */
+    private String identityMode = "dcp";
 
     public String getApiKey() {
         return apiKey;
@@ -28,11 +34,27 @@ public class ReedProperties {
         this.apiKey = apiKey;
     }
 
-    public String getOwnerBpn() {
-        return ownerBpn;
+    public String getDeploymentDir() {
+        return deploymentDir;
     }
 
-    public void setOwnerBpn(String ownerBpn) {
-        this.ownerBpn = ownerBpn;
+    public void setDeploymentDir(String deploymentDir) {
+        this.deploymentDir = deploymentDir;
+    }
+
+    public String getInternalUrl() {
+        return internalUrl;
+    }
+
+    public void setInternalUrl(String internalUrl) {
+        this.internalUrl = internalUrl;
+    }
+
+    public String getIdentityMode() {
+        return identityMode;
+    }
+
+    public void setIdentityMode(String identityMode) {
+        this.identityMode = identityMode;
     }
 }

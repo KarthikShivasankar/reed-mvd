@@ -3,7 +3,7 @@
  *
  * As of EDC 0.17.0 the Federated Catalog core + API modules are shipped inside
  * the Connector repo and wired up by controlplane-base-bom. We therefore build
- * the FC runtime on top of controlplane-base-bom too - this gives us the
+ * the FC runtime on top of controlplane-dcp-bom (base + DCP) - this gives us the
  * management web context that the CatalogsApi controller relies on.
  */
 
@@ -14,11 +14,13 @@ plugins {
 }
 
 dependencies {
-    runtimeOnly(libs.edc.bom.controlplane.base)
+    // controlplane-dcp-bom = controlplane-base-bom + DCP identity. The crawler
+    // presents its own credentials, so the FC needs its own IdentityHub
+    // participant context + MembershipCredential (like any connector).
+    runtimeOnly(libs.edc.bom.controlplane.dcp)
     runtimeOnly(project(":extensions:static-node-directory"))
 
-    implementation(libs.edc.iam.mock)
-    implementation(libs.edc.vault.hashicorp)
+    runtimeOnly(libs.edc.vault.hashicorp)
 }
 
 application {
