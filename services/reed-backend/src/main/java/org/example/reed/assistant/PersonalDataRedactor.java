@@ -18,11 +18,21 @@ public final class PersonalDataRedactor {
 
     private static final Pattern EMAIL = Pattern.compile("[\\w.+-]+@[\\w-]+(\\.[\\w-]+)+");
     /**
-     * International (+47 ..., 0049 ...) or space-grouped (030 1234 5678) numbers with at least 8 digits.
-     * Plain digit runs (part numbers, serials) and ISO dates are deliberately not treated as phones.
+     * Phone numbers, three shapes (each must contain at least 8 digits):
+     * international (+47 912 34 567, 0049 431 1234567), national with a leading 0 and a
+     * separator (0211-123456, 030/1234567, 0211.123.456, (030) 1234 5678) and space-grouped
+     * (912 34 567). Tokens glued to letters (DWG-4471-02), plain digit runs (part numbers, serials)
+     * and dates (2027-07-25, 05/09/2027) are not phone numbers.
      */
     private static final Pattern PHONE = Pattern.compile(
-            "(?<![\\w.+])(?:(?:\\+|00)\\d[\\d ()/-]{6,}\\d|\\(?\\d{2,5}\\)? \\d{2,4} \\d{2,6}(?: \\d{1,6})?)(?![\\w.])");
+            "(?<![\\w.+/-])(?:"
+                    + "(?:\\+|00)\\d[\\d ()/.-]{6,}\\d"
+                    + "|\\(?0\\d{2,4}\\)?[ /.-]\\d{2,8}(?:[ /.-]\\d{1,8}){0,3}"
+                    + "|\\(?\\d{2,5}\\)? \\d{2,4} \\d{2,6}(?: \\d{1,6})?"
+                    + ")(?![\\w/-]|\\.\\d)");
+    /** Any digit run (8+ digits) right after a cue word such as "tel" or "phone". */
+    private static final Pattern CUED_PHONE = Pattern.compile(
+            "(?i)(?<=\\b(?:tel|telephone|phone|mobile|mob|fax|call|ring)[.:]?\\s{0,3})\\+?\\d[\\d ()/.-]{6,}\\d");
 
     public record Result(String text, int redactions) {
     }
@@ -36,6 +46,7 @@ public final class PersonalDataRedactor {
         }
         int[] count = {0};
         var out = replace(EMAIL, text, count, m -> true);
+        out = replace(CUED_PHONE, out, count, m -> m.replaceAll("\\D", "").length() >= 8);
         out = replace(PHONE, out, count, m -> m.replaceAll("\\D", "").length() >= 8);
         for (var name : personNames) {
             if (name != null && name.length() >= 3) {

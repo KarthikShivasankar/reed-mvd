@@ -71,3 +71,11 @@ test("a supplier cannot see competitors' scores", async ({ page }) => {
   await expect(page.locator(".notice")).toContainText("Only Nordvind Energy Systems AS sees the full ranking");
   await expect(page.locator(".rank-row")).toHaveCount(0);
 });
+
+test("ids from links cannot steer requests to other endpoints", async ({ page }) => {
+  const calls: string[] = [];
+  page.on("request", (r) => { if (r.url().includes("/reed/")) calls.push(r.url()); });
+  await login(page, "nordvind-buyer", "matches/..%2F..%2Fconnectors%2Fnordvind%2Fv3%2Fassets");
+  await expect(page.getByText("to see its ranked suppliers")).toBeVisible(); // falls back to the RFQ picker
+  expect(calls.filter((u) => u.includes("/connectors/"))).toHaveLength(0);
+});

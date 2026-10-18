@@ -19,9 +19,18 @@ export type View =
 
 export interface Route { view: View; arg?: string }
 
+/** Route arguments are ids (e.g. R1, RFQ-97E536A4); anything else is ignored rather than passed on. */
+const ARG = /^[A-Za-z0-9_-]{1,64}$/;
+
 function parseHash(): Route {
-  const [view, arg] = window.location.hash.replace(/^#\/?/, "").split("/");
-  return { view: (view || "overview") as View, arg: arg ? decodeURIComponent(arg) : undefined };
+  const [view, raw] = window.location.hash.replace(/^#\/?/, "").split("/");
+  let arg: string | undefined;
+  try {
+    arg = raw ? decodeURIComponent(raw) : undefined;
+  } catch {
+    arg = undefined;
+  }
+  return { view: (view || "overview") as View, arg: arg && ARG.test(arg) ? arg : undefined };
 }
 
 export function go(view: View, arg?: string) {

@@ -42,6 +42,13 @@ class AssistantGuardrailsTest {
                 + "call Hanse on 0049 431 1234567 or (030) 1234 5678", List.of());
         assertThat(parts.text()).contains("1792316850123", "DWG-4471-02", "2027-07-25").doesNotContain("1234567", "5678");
         assertThat(parts.redactions()).isEqualTo(2);
+
+        var national = PersonalDataRedactor.redact("Office 0211-123456, fax 030/1234567, desk 0211.123.456, "
+                + "Tel: 21234567, ring 912345678. Part 4.2 x 4.0 x 3.6 m, 38 t, ordered 05/09/2027, "
+                + "lot 12345678, DWG-0211-123456", List.of());
+        assertThat(national.text()).doesNotContain("0211-123456,", "030/1234567", "0211.123.456", "21234567", "912345678")
+                .contains("4.2 x 4.0 x 3.6 m", "38 t", "05/09/2027", "lot 12345678", "DWG-0211-123456");
+        assertThat(national.redactions()).isEqualTo(5);
     }
 
     @Test

@@ -223,6 +223,9 @@ const MGMT_CONTEXT = ["https://w3id.org/edc/connector/management/v2"];
 const QUERY = { "@context": { "@vocab": "https://w3id.org/edc/v0.0.1/ns/" }, "@type": "QuerySpec", offset: 0, limit: 50 };
 const DSP = "dataspace-protocol-http:2025-1";
 
+/** Encodes one URL path segment, so ids from links (URL hash) can never steer a request to another endpoint. */
+const seg = (v: string | number) => encodeURIComponent(String(v));
+
 /* ----------------------------- REED client ----------------------------- */
 /**
  * All calls go to the REED backend with the user's bearer token. EDC
@@ -269,28 +272,28 @@ export class Api {
 
   /* ---- matchmaking ---- */
   rfqs() { return this.call<Rfq[]>("GET", "/reed/rfqs"); }
-  rfq(id: string) { return this.call<Rfq>("GET", `/reed/rfqs/${id}`); }
+  rfq(id: string) { return this.call<Rfq>("GET", `/reed/rfqs/${seg(id)}`); }
   createRfq(form: Record<string, unknown>) { return this.call<Rfq>("POST", "/reed/rfqs", form); }
-  matches(rfqId: string) { return this.call<RankedSupplier[]>("GET", `/reed/rfqs/${rfqId}/matches`); }
-  partners(rfqId: string) { return this.call<PartnerRecommendation[]>("GET", `/reed/rfqs/${rfqId}/partners`); }
+  matches(rfqId: string) { return this.call<RankedSupplier[]>("GET", `/reed/rfqs/${seg(rfqId)}/matches`); }
+  partners(rfqId: string) { return this.call<PartnerRecommendation[]>("GET", `/reed/rfqs/${seg(rfqId)}/partners`); }
   opportunities() { return this.call<Opportunity[]>("GET", "/reed/opportunities"); }
   myMatches() { return this.call<MatchRecord[]>("GET", "/reed/matches"); }
-  shortlist(rfqId: string, bpn: string) { return this.call<MatchRecord>("POST", `/reed/rfqs/${rfqId}/shortlist/${bpn}`); }
-  accept(id: number) { return this.call<MatchRecord>("POST", `/reed/matches/${id}/accept`); }
-  decline(id: number) { return this.call<MatchRecord>("POST", `/reed/matches/${id}/decline`); }
-  confirm(id: number, agreementId: string) { return this.call<MatchRecord>("POST", `/reed/matches/${id}/confirm`, { agreementId }); }
+  shortlist(rfqId: string, bpn: string) { return this.call<MatchRecord>("POST", `/reed/rfqs/${seg(rfqId)}/shortlist/${seg(bpn)}`); }
+  accept(id: number) { return this.call<MatchRecord>("POST", `/reed/matches/${seg(id)}/accept`); }
+  decline(id: number) { return this.call<MatchRecord>("POST", `/reed/matches/${seg(id)}/decline`); }
+  confirm(id: number, agreementId: string) { return this.call<MatchRecord>("POST", `/reed/matches/${seg(id)}/confirm`, { agreementId }); }
   feedback(id: number, onTime: boolean, qualityOk: boolean) {
-    return this.call<MatchRecord>("POST", `/reed/matches/${id}/feedback`, { onTime, qualityOk });
+    return this.call<MatchRecord>("POST", `/reed/matches/${seg(id)}/feedback`, { onTime, qualityOk });
   }
 
   /* ---- assistant (local LLM) ---- */
   draftRfq(text: string) { return this.call<DraftResponse>("POST", "/reed/assistant/rfq-draft", { text }); }
-  explain(rfqId: string) { return this.call<Explanation>("POST", `/reed/assistant/explain/${rfqId}`); }
+  explain(rfqId: string) { return this.call<Explanation>("POST", `/reed/assistant/explain/${seg(rfqId)}`); }
   chat(messages: { role: string; content: string }[]) { return this.call<ChatReply>("POST", "/reed/assistant/chat", { messages }); }
 
   /* ---- EDC via the backend relay ---- */
   private mgmt<T = any>(connector: string, method: string, path: string, body?: unknown) {
-    return this.call<T>(method, `/reed/connectors/${connector}${path}`, body);
+    return this.call<T>(method, `/reed/connectors/${seg(connector)}${path}`, body);
   }
   federatedCatalog() { return this.call<any[]>("POST", "/reed/federated-catalog/v3/catalogs/request", QUERY); }
   catalogOf(consumer: string, provider: ConnectorRef) {
@@ -307,15 +310,15 @@ export class Api {
       policy: { ...offer, assigner: provider.participantId, target: assetId },
     });
   }
-  negotiation(consumer: string, id: string) { return this.mgmt(consumer, "GET", `/v3/contractnegotiations/${id}`); }
+  negotiation(consumer: string, id: string) { return this.mgmt(consumer, "GET", `/v3/contractnegotiations/${seg(id)}`); }
   transfer(consumer: string, provider: ConnectorRef, agreementId: string) {
     return this.mgmt(consumer, "POST", "/v3/transferprocesses", {
       "@context": MGMT_CONTEXT, "@type": "TransferRequest",
       counterPartyAddress: provider.dspUrl, protocol: DSP, contractId: agreementId, transferType: "HttpData-PULL",
     });
   }
-  transferProcess(consumer: string, id: string) { return this.mgmt(consumer, "GET", `/v3/transferprocesses/${id}`); }
-  edr(consumer: string, transferId: string) { return this.mgmt(consumer, "GET", `/v3/edrs/${transferId}/dataaddress`); }
+  transferProcess(consumer: string, id: string) { return this.mgmt(consumer, "GET", `/v3/transferprocesses/${seg(id)}`); }
+  edr(consumer: string, transferId: string) { return this.mgmt(consumer, "GET", `/v3/edrs/${seg(transferId)}/dataaddress`); }
   list(consumer: string, kind: "contractnegotiations" | "transferprocesses") {
     return this.mgmt<any[]>(consumer, "POST", `/v3/${kind}/request`, QUERY).then((j) => (Array.isArray(j) ? j : [j]));
   }
