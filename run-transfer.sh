@@ -42,8 +42,9 @@ log "4. REED audit trail (usage layer)"
 AUDIT=$(api "$(token reed-admin)" GET /reed/audit)
 jq --arg a "$ASSET_ID" '[.[] | select(.assetId == $a and .eventType == "PULL")] | .[0]' <<<"$AUDIT"
 CONSUMER_BPN=$(bpn_of "$CONSUMER")
-[[ $(jq -r --arg a "$ASSET_ID" '[.[] | select(.assetId == $a and .eventType == "PULL")][0].detail' <<<"$AUDIT") == *"by $CONSUMER_BPN"* ]] \
-  && pass "PULL recorded, naming the consumer ($CONSUMER_BPN)" || fail "no PULL audit event naming $CONSUMER_BPN"
+[[ $(jq -r --arg a "$ASSET_ID" '[.[] | select(.assetId == $a and .eventType == "PULL")][0].detail' <<<"$AUDIT") == *"by $CONSUMER_BPN (verified: contract agreement"* ]] \
+  && pass "PULL recorded, consumer $CONSUMER_BPN verified against the contract agreement" \
+  || fail "no PULL audit event naming $CONSUMER_BPN with a verified agreement"
 
 # ---------- negative: credentials decide ----------
 log "5. castellum (role SUPPLIER) negotiates wisla's ProcessCapability (contract policy: role OEM)"

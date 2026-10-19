@@ -8,7 +8,8 @@ source "$ROOT/deployment/.env"; set +a
 REED_BACKEND="${REED_BACKEND:-http://localhost:8081}"
 KEYCLOAK="${KEYCLOAK:-http://localhost:8180}"
 DEMO_PASSWORD="$(jq -r .dataspace.demoPassword "$ROSTER")"
-CTX='["https://w3id.org/edc/connector/management/v2"]'
+CTX='["https://w3id.org/edc/connector/management/v2"]'   # Management API v4 (EDR cache: v3, CEL: v5beta)
+QS='{"@context":["https://w3id.org/edc/connector/management/v2"],"@type":"QuerySpec","limit":500}'
 PROTO="dataspace-protocol-http:2025-1"
 
 log()  { printf '\n\033[1;34m[%s]\033[0m %s\n' "${LOG_TAG:-reed}" "$*"; }
@@ -62,7 +63,7 @@ wait_for() { # wait_for <description> <url> [header]
 
 # catalog <consumer> <provider> -> DCAT catalog JSON
 catalog() {
-  mgmt "$1" POST /v3/catalog/request '{"@context": '"$CTX"', "@type": "CatalogRequest",
+  mgmt "$1" POST /v4/catalog/request '{"@context": '"$CTX"', "@type": "CatalogRequest",
     "counterPartyId": "'"$(did_of "$2")"'", "counterPartyAddress": "'"$(dsp_of "$2")"'", "protocol": "'$PROTO'"}'
 }
 
@@ -72,10 +73,10 @@ datasets() { jq -c '[.dataset // [] | (if type=="array" then . else [.] end)[]]'
 negotiate() {
   local c=$1 p=$2 a=$3 offer id neg st
   offer=$(jq -c --arg a "$a" --arg p "$(did_of "$p")" '. + {assigner: $p, target: $a}' <<<"$4")
-  id=$(mgmt "$c" POST /v3/contractnegotiations '{"@context": '"$CTX"', "@type": "ContractRequest",
+  id=$(mgmt "$c" POST /v4/contractnegotiations '{"@context": '"$CTX"', "@type": "ContractRequest",
     "counterPartyAddress": "'"$(dsp_of "$p")"'", "protocol": "'$PROTO'", "policy": '"$offer"'}' | jq -r '."@id"')
   for _ in $(seq 1 45); do
-    neg=$(mgmt "$c" GET "/v3/contractnegotiations/$id")
+    neg=$(mgmt "$c" GET "/v4/contractnegotiations/$id")
     st=$(jq -r .state <<<"$neg")
     [[ $st == FINALIZED || $st == TERMINATED ]] && break
     sleep 1
@@ -86,11 +87,11 @@ negotiate() {
 # pull <consumer> <provider> <agreementId> -> payload (HttpData-PULL transfer + EDR + data-plane GET)
 pull() {
   local c=$1 p=$2 agr=$3 tp st edr
-  tp=$(mgmt "$c" POST /v3/transferprocesses '{"@context": '"$CTX"', "@type": "TransferRequest",
+  tp=$(mgmt "$c" POST /v4/transferprocesses '{"@context": '"$CTX"', "@type": "TransferRequest",
     "counterPartyAddress": "'"$(dsp_of "$p")"'", "protocol": "'$PROTO'",
     "contractId": "'"$agr"'", "transferType": "HttpData-PULL"}' | jq -r '."@id"')
   for _ in $(seq 1 45); do
-    st=$(mgmt "$c" GET "/v3/transferprocesses/$tp" | jq -r .state)
+    st=$(mgmt "$c" GET "/v4/transferprocesses/$tp" | jq -r .state)
     [[ $st == STARTED || $st == TERMINATED ]] && break
     sleep 1
   done

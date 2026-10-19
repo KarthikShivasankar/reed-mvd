@@ -6,7 +6,10 @@
 
 package org.example.reed.web;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.example.reed.config.ReedProperties;
+import org.example.reed.domain.Asset;
+import org.example.reed.edc.ConnectorClient;
 import org.example.reed.domain.AuditEvent;
 import org.example.reed.domain.EventType;
 import org.example.reed.repo.AssetRepository;
@@ -23,6 +26,8 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.security.MessageDigest;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.Map;
 
 /**
  * The REED <b>submodel service</b>: serves the confidential payload for an
@@ -38,13 +43,52 @@ public class SubmodelController {
     private final AssetRepository assets;
     private final AuditEventRepository audit;
     private final ParticipantRepository participants;
+    private final ConnectorClient connectors;
+    private final ObjectMapper mapper;
 
     public SubmodelController(ReedProperties props, AssetRepository assets, AuditEventRepository audit,
-                              ParticipantRepository participants) {
+                              ParticipantRepository participants, ConnectorClient connectors, ObjectMapper mapper) {
         this.props = props;
         this.assets = assets;
         this.audit = audit;
         this.participants = participants;
+        this.connectors = connectors;
+        this.mapper = mapper;
+    }
+
+    /**
+     * The owner's data plane names the consumer from the EDR token it has just verified. That is the
+     * owner's assertion, so the owner stays the audit actor; REED cross-checks it against the contract
+     * agreements on the owner's connector (negotiated over DSP with the consumer's credentials) and
+     * records the consumer only if it is a known member.
+     */
+    private String consumerNote(Asset asset, String consumerDid) {
+        if (consumerDid == null) {
+            return "";
+        }
+        var consumer = participants.findByDid(consumerDid).orElse(null);
+        if (consumer == null) {
+            return " by an unrecognised consumer";
+        }
+        var owner = participants.findById(asset.ownerBpn).orElse(null);
+        if (owner == null || owner.connectorName == null) {
+            return " by " + consumer.bpn + " (asserted by the owner's data plane)";
+        }
+        try {
+            var query = mapper.writeValueAsString(Map.of(
+                    "@context", List.of("https://w3id.org/edc/connector/management/v2"),
+                    "@type", "QuerySpec", "limit", 1,
+                    "filterExpression", List.of(
+                            Map.of("@type", "Criterion", "operandLeft", "assetId", "operator", "=", "operandRight", asset.assetId),
+                            Map.of("@type", "Criterion", "operandLeft", "consumerId", "operator", "=", "operandRight", consumerDid))));
+            var agreements = mapper.readTree(connectors.post(owner.connectorName, owner.managementUrl,
+                    "/v4/contractagreements/request", query));
+            return agreements.isArray() && !agreements.isEmpty()
+                    ? " by " + consumer.bpn + " (verified: contract agreement " + agreements.get(0).path("@id").asText() + ")"
+                    : " by " + consumer.bpn + " (asserted by the owner's data plane, but no matching contract agreement)";
+        } catch (Exception e) {
+            return " by " + consumer.bpn + " (asserted by the owner's data plane; agreement check unavailable)";
+        }
     }
 
     @GetMapping(value = "/reed/submodels/{assetId}", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -57,14 +101,8 @@ public class SubmodelController {
                 props.ownerKey(asset.ownerBpn).getBytes(StandardCharsets.UTF_8))) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "missing or invalid X-Api-Key for this asset's owner");
         }
-        // The owner's data plane names the consumer from the EDR token it has just verified. That is an
-        // assertion by the (key-authenticated) owner, so the owner stays the audit actor and the
-        // consumer goes into the detail - and only if the DID belongs to a known member.
-        var consumer = consumerDid == null ? null : participants.findByDid(consumerDid).map(p -> p.bpn).orElse(null);
         audit.save(new AuditEvent(EventType.PULL, asset.ownerBpn, assetId,
-                "confidential payload of " + asset.ownerBpn + " pulled via EDR data plane"
-                        + (consumer != null ? " by " + consumer + " (consumer named by the owner's data plane from the verified EDR)"
-                        : consumerDid != null ? " by an unrecognised consumer" : "")));
+                "confidential payload of " + asset.ownerBpn + " pulled via EDR data plane" + consumerNote(asset, consumerDid)));
         return ResponseEntity.ok(asset.payload);
     }
 }

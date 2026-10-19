@@ -9,11 +9,10 @@ set -euo pipefail
 LOG_TAG=persist
 source "$(dirname "$0")/tools/reed-lib.sh"
 COMPOSE="docker compose -f $ROOT/deployment/docker-compose.yml"
-QS='{"@context":{"@vocab":"https://w3id.org/edc/v0.0.1/ns/"},"@type":"QuerySpec","limit":500}'
 
 snapshot() {
-  echo "assets=$(mgmt castellum POST /v3/assets/request "$QS" | jq length)"
-  echo "agreements=$(mgmt nordvind POST /v3/contractagreements/request "$QS" | jq length)"
+  echo "assets=$(mgmt castellum POST /v4/assets/request "$QS" | jq length)"
+  echo "agreements=$(mgmt nordvind POST /v4/contractagreements/request "$QS" | jq length)"
   echo "cel=$(mgmt wisla POST /v5beta/celexpressions/request "$QS" | jq length)"
   # credentials still ISSUED (state 500) in every member's IdentityHub - not merely stored
   local issued=0 n px key
@@ -29,14 +28,14 @@ snapshot() {
 
 log "before restart"
 BEFORE=$(snapshot); echo "$BEFORE"
-AGR=$(mgmt nordvind POST /v3/contractagreements/request "$QS" | jq -r '.[0]["@id"] // empty')
+AGR=$(mgmt nordvind POST /v4/contractagreements/request "$QS" | jq -r '.[0]["@id"] // empty')
 
 log "stopping and starting the whole stack (volumes kept)"
 $COMPOSE down
 $COMPOSE up -d
 wait_for "REED backend" "$REED_BACKEND/reed/health"
 for c in $(jq -r '.participants[] | select(.connector) | .connector.name' "$ROSTER"); do
-  wait_for "connector $c" "$(mgmt_url "$c")/v3/assets/request" "X-Api-Key: $(mgmt_key "$c")"
+  wait_for "connector $c" "$(mgmt_url "$c")/v4/assets/request" "X-Api-Key: $(mgmt_key "$c")"
 done
 
 log "after restart (no seeding)"
@@ -44,7 +43,7 @@ AFTER=$(snapshot); echo "$AFTER"
 [[ "$BEFORE" == "$AFTER" ]] && pass "assets, agreements, CEL rules, credentials and RFQs all survived" \
   || fail "state changed across the restart"
 if [[ -n $AGR ]]; then
-  mgmt nordvind GET "/v3/contractagreements/$AGR" >/dev/null && pass "earlier agreement $AGR still readable" \
+  mgmt nordvind GET "/v4/contractagreements/$AGR" >/dev/null && pass "earlier agreement $AGR still readable" \
     || fail "agreement $AGR lost"
 fi
 

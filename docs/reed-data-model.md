@@ -50,7 +50,7 @@ can find and negotiate it during matchmaking) while its contract policy stays `o
 |---|---|---|---|
 | **Catalogue** | may this member know the asset exists? | `/reed/catalogue` - discoverability vs. the supply-chain graph | access policy per discoverability on the requester's credentials |
 | **Contract** | may this member agree a contract for it? | the asset's policy template | contract policy: credential constraints, e.g. role OEM |
-| **Usage** | what is allowed afterwards? | `reed:odrl` prohibitions/obligations + `PULL` audit events (actor: the owner; the consumer, as named by the owner's data plane from the verified EDR, in the detail) | - |
+| **Usage** | what is allowed afterwards? | `reed:odrl` prohibitions/obligations + `PULL` audit events (actor: the owner; the consumer, as named by the owner's data plane from the verified EDR and cross-checked against the contract agreement on the owner's connector, in the detail) | - |
 
 Templates (`DataSeeder`): `consortium-only` (membership), `bilateral-supplier` (supply relation
 with the owner), `dpp-read-only` (membership, no modification), `oem-only` (role OEM),

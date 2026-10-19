@@ -48,7 +48,7 @@ export const STEPS: Step[] = [
     color: C.orange,
     blurb:
       "The REED backend renders each owner's assets into its own connector as offers - metadata and credential-constrained policies only, never the payload. The federated catalog crawls every member's catalog with its own credentials.",
-    wire: "seed-reed.sh → POST /v5beta/celexpressions · /v3/assets · /v3/policydefinitions · /v3/contractdefinitions   ·   FC crawler → DSP catalog request",
+    wire: "seed-reed.sh → POST /v5beta/celexpressions · /v4/assets · /v4/policydefinitions · /v4/contractdefinitions   ·   FC crawler → DSP catalog request",
     layer: "renders all three policy layers from the REED tables",
   },
   {
@@ -59,7 +59,7 @@ export const STEPS: Step[] = [
     color: C.cyan,
     blurb:
       "The consumer's control plane asks the provider for its catalog over DSP, presenting verifiable credentials (membership, certifications, supply relations) obtained from its IdentityHub. The provider's access policies decide which offers it may even see - metadata only, no payload.",
-    wire: "consumer CP → STS token + verifiable presentation → provider CP: POST /v3/catalog/request (DSP)",
+    wire: "consumer CP → STS token + verifiable presentation → provider CP: POST /v4/catalog/request (DSP)",
     layer: "catalogue layer - access policy per discoverability, evaluated on credentials",
   },
   {
@@ -70,7 +70,7 @@ export const STEPS: Step[] = [
     color: C.amber,
     blurb:
       "The two control planes run an asynchronous DSP contract negotiation. The provider evaluates its contract policy (e.g. role OEM, DNV certified) as CEL rules over the consumer's credentials. When it reaches FINALIZED, an agreement bound to the consumer's DID exists. No agreement, no data.",
-    wire: "consumer CP → POST /v3/contractnegotiations   ·   poll GET /v3/contractnegotiations/{id} → state FINALIZED",
+    wire: "consumer CP → POST /v4/contractnegotiations   ·   poll GET /v4/contractnegotiations/{id} → state FINALIZED",
     layer: "contract layer — the EDC contract policy gates access",
   },
   {
@@ -81,7 +81,7 @@ export const STEPS: Step[] = [
     color: C.amber,
     blurb:
       "Using the agreement as a token, the consumer's control plane starts an HttpData-PULL transfer process. The provider's control plane reaches STARTED and signals its data plane to prepare access.",
-    wire: "consumer CP → POST /v3/transferprocesses (transferType HttpData-PULL)   ·   poll → state STARTED",
+    wire: "consumer CP → POST /v4/transferprocesses (transferType HttpData-PULL)   ·   poll → state STARTED",
   },
   {
     id: "edr",

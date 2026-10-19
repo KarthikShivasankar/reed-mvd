@@ -67,7 +67,7 @@ connectivity bugs are a URL on the wrong side of that line.
 - **DCP** (Decentralized Claims Protocol) - every DSP request carries a token from the
   requester's IdentityHub STS; the provider fetches a verifiable presentation of the requester's
   credentials, checks the issuer is trusted, then evaluates its policies.
-- **Management API** - REST to drive your own connector; never exposed to browsers.
+- **Management API** - REST (v4; EDR cache v3, CEL v5beta) to drive your own connector; never exposed to browsers.
 - **EDR** - short-lived ES256 JWT minted by the provider data plane after a contract, valid for
   pulls of that one asset.
 - **OIDC** - human login; tokens carry roles and the organisation.

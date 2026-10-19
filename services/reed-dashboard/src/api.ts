@@ -220,7 +220,8 @@ export class ApiError extends Error {
 }
 
 const MGMT_CONTEXT = ["https://w3id.org/edc/connector/management/v2"];
-const QUERY = { "@context": { "@vocab": "https://w3id.org/edc/v0.0.1/ns/" }, "@type": "QuerySpec", offset: 0, limit: 50 };
+/** Management API v4 needs the management/v2 context and an explicit @type (the EDR cache stays on v3). */
+const QUERY = { "@context": MGMT_CONTEXT, "@type": "QuerySpec", offset: 0, limit: 50 };
 const DSP = "dataspace-protocol-http:2025-1";
 
 /** Encodes one URL path segment, so ids from links (URL hash) can never steer a request to another endpoint. */
@@ -295,32 +296,32 @@ export class Api {
   private mgmt<T = any>(connector: string, method: string, path: string, body?: unknown) {
     return this.call<T>(method, `/reed/connectors/${seg(connector)}${path}`, body);
   }
-  federatedCatalog() { return this.call<any[]>("POST", "/reed/federated-catalog/v3/catalogs/request", QUERY); }
+  federatedCatalog() { return this.call<any[]>("POST", "/reed/federated-catalog/v4/catalogs/request", QUERY); }
   catalogOf(consumer: string, provider: ConnectorRef) {
-    return this.mgmt(consumer, "POST", "/v3/catalog/request", {
+    return this.mgmt(consumer, "POST", "/v4/catalog/request", {
       "@context": MGMT_CONTEXT, "@type": "CatalogRequest",
       counterPartyId: provider.participantId, counterPartyAddress: provider.dspUrl, protocol: DSP,
     });
   }
   negotiate(consumer: string, provider: ConnectorRef, offer: any, assetId: string) {
-    return this.mgmt(consumer, "POST", "/v3/contractnegotiations", {
+    return this.mgmt(consumer, "POST", "/v4/contractnegotiations", {
       "@context": MGMT_CONTEXT, "@type": "ContractRequest",
       counterPartyAddress: provider.dspUrl, protocol: DSP,
       // the offer exactly as the provider published it, bound to provider and asset
       policy: { ...offer, assigner: provider.participantId, target: assetId },
     });
   }
-  negotiation(consumer: string, id: string) { return this.mgmt(consumer, "GET", `/v3/contractnegotiations/${seg(id)}`); }
+  negotiation(consumer: string, id: string) { return this.mgmt(consumer, "GET", `/v4/contractnegotiations/${seg(id)}`); }
   transfer(consumer: string, provider: ConnectorRef, agreementId: string) {
-    return this.mgmt(consumer, "POST", "/v3/transferprocesses", {
+    return this.mgmt(consumer, "POST", "/v4/transferprocesses", {
       "@context": MGMT_CONTEXT, "@type": "TransferRequest",
       counterPartyAddress: provider.dspUrl, protocol: DSP, contractId: agreementId, transferType: "HttpData-PULL",
     });
   }
-  transferProcess(consumer: string, id: string) { return this.mgmt(consumer, "GET", `/v3/transferprocesses/${seg(id)}`); }
+  transferProcess(consumer: string, id: string) { return this.mgmt(consumer, "GET", `/v4/transferprocesses/${seg(id)}`); }
   edr(consumer: string, transferId: string) { return this.mgmt(consumer, "GET", `/v3/edrs/${seg(transferId)}/dataaddress`); }
   list(consumer: string, kind: "contractnegotiations" | "transferprocesses") {
-    return this.mgmt<any[]>(consumer, "POST", `/v3/${kind}/request`, QUERY).then((j) => (Array.isArray(j) ? j : [j]));
+    return this.mgmt<any[]>(consumer, "POST", `/v4/${kind}/request`, QUERY).then((j) => (Array.isArray(j) ? j : [j]));
   }
   async pull(endpoint: string, authorization: string): Promise<string> {
     const res = await fetch(endpoint, { headers: { Authorization: authorization } });

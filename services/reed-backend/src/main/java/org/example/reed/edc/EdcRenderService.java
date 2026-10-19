@@ -22,8 +22,9 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Renders EDC Management API payloads (assets, policy definitions, contract
- * definitions) for <em>one owner's</em> connector from the REED tables. REED is
+ * Renders EDC Management API v4 payloads (assets, policy definitions, contract
+ * definitions; CEL expressions for v5beta) for <em>one owner's</em> connector from the REED tables.
+ * All use the {@code management/v2} JSON-LD context with an explicit {@code @type}, as v4 requires. REED is
  * the source of truth; {@code seed-reed.sh} loops over every participant with a
  * connector and POSTs these into its Management API.
  *
@@ -108,6 +109,7 @@ public class EdcRenderService {
         properties.put("reed:odrl", faithfulOdrl);
 
         var dataAddress = new LinkedHashMap<String, Object>();
+        dataAddress.put("@type", "DataAddress");
         dataAddress.put("type", "HttpData");
         dataAddress.put("name", a.assetId);
         dataAddress.put("baseUrl", props.getInternalUrl() + "/reed/submodels/" + a.assetId);
@@ -119,7 +121,8 @@ public class EdcRenderService {
         dataAddress.put("authCode", props.ownerKey(a.ownerBpn));
 
         var asset = new LinkedHashMap<String, Object>();
-        asset.put("@context", Map.of("@vocab", EDC_VOCAB));
+        asset.put("@context", List.of(MANAGEMENT_CONTEXT));
+        asset.put("@type", "Asset");
         asset.put("@id", a.assetId);
         asset.put("properties", properties);
         asset.put("dataAddress", dataAddress);
@@ -234,7 +237,8 @@ public class EdcRenderService {
         criterion.put("operandRight", a.assetId);
 
         var def = new LinkedHashMap<String, Object>();
-        def.put("@context", Map.of("@vocab", EDC_VOCAB));
+        def.put("@context", List.of(MANAGEMENT_CONTEXT));
+        def.put("@type", "ContractDefinition");
         def.put("@id", "reed-contract-" + a.assetId);
         def.put("accessPolicyId", accessPolicyId(a.discoverability));
         def.put("contractPolicyId", contractPolicyId(a.policyTemplate));

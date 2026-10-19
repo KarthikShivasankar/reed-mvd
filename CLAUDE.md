@@ -100,8 +100,10 @@ Spring Boot 3.3 + Postgres, schema by **Flyway** (`db/migration`, Hibernate `val
   upstream header).
 - Connector stores and CEL expressions are in **Postgres** (`edc_<name>`, SQL BOMs + `cel-store-sql`);
   Keycloak runs in production mode on Postgres. Seeding is needed once per `down -v`.
-- `http-pull-proxy` forwards `X-Edc-Consumer` (the verified EDR token's `aud`) so PULL audits name the consumer (in the detail; the key-authenticated owner stays the actor, unknown DIDs are ignored).
+- `http-pull-proxy` forwards `X-Edc-Consumer` (the verified EDR token's `aud`) so PULL audits name the consumer (in the detail, cross-checked against a contract agreement on the owner's connector; the key-authenticated owner stays the actor, unknown DIDs are ignored).
 - Management APIs: `web.http.management.auth.type=tokenbased`, key alias `<name>-mgmt-api-key` in Vault.
+- Management API **v4** everywhere (v4 needs the `management/v2` context and an explicit `@type`
+  on every body, incl. `QuerySpec`); exceptions: EDR cache `/v3/edrs/...`, CEL `/v5beta/celexpressions`.
 - All EDC `*/request` list endpoints need a `QuerySpec` body.
 
 ### Ports and URL rule

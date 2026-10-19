@@ -66,6 +66,16 @@ public class ConnectorClient {
         }
     }
 
+    /** POST that must succeed; returns the body. */
+    public String post(String connectorName, String managementUrl, String path, String body) {
+        var res = exchange(connectorName, managementUrl, HttpMethod.POST, path, body);
+        if (!res.getStatusCode().is2xxSuccessful()) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
+                    "connector " + connectorName + " answered " + res.getStatusCode() + " for " + path);
+        }
+        return res.getBody();
+    }
+
     public String get(String connectorName, String managementUrl, String path) {
         var res = exchange(connectorName, managementUrl, HttpMethod.GET, path, null);
         if (!res.getStatusCode().is2xxSuccessful()) {

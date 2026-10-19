@@ -31,12 +31,12 @@ render() { curl -fsS "$REED_BACKEND/reed/edc/$1" -H "Authorization: Bearer $ADMI
 
 for c in $(jq -r '.participants[] | select(.connector) | .connector.name' "$ROSTER"); do
   owner=$(bpn_of "$c")
-  wait_for "connector $c" "$(mgmt_url "$c")/v3/assets/request" "X-Api-Key: $(mgmt_key "$c")"
+  wait_for "connector $c" "$(mgmt_url "$c")/v4/assets/request" "X-Api-Key: $(mgmt_key "$c")"
   log "$c ($owner): CEL expressions"
   render celexpressions | jq -c '.[]' | while IFS= read -r item; do post "$c" /v5beta/celexpressions "$item"; done
   for kind in assets policydefinitions contractdefinitions; do
     log "$c ($owner): $kind"
-    render "$kind?owner=$owner" | jq -c '.[]' | while IFS= read -r item; do post "$c" "/v3/$kind" "$item"; done
+    render "$kind?owner=$owner" | jq -c '.[]' | while IFS= read -r item; do post "$c" "/v4/$kind" "$item"; done
   done
 done
 log "seed complete - every connector offers its owner's REED assets (metadata only)"

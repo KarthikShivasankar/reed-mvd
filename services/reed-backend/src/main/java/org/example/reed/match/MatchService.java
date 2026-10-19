@@ -196,7 +196,7 @@ public class MatchService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "malformed agreement id");
         }
         var agreement = readJson(connectors.get(buyer.connectorName, buyer.managementUrl,
-                "/v3/contractagreements/" + agreementId));
+                "/v4/contractagreements/" + agreementId));
         var assetId = text(agreement, "assetId");
         if (!m.detailAssetId.equals(assetId)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,

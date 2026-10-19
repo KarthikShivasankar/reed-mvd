@@ -158,7 +158,8 @@ docs/                               architecture, identity, matchmaking, data mo
 What is production-style today: per-company IdentityHubs and Vault folders, persistent Vault and
 stores, Keycloak in production mode on Postgres, generated secrets (`deployment/.env`), admin APIs
 and databases bound to localhost, key-protected Management APIs behind a user-scoped relay,
-credential-based EDC policies, an audit trail naming who pulled each payload.
+credential-based EDC policies, Management API v4, an audit trail naming who pulled each payload
+(cross-checked against the contract agreement on the owner's connector).
 
 Deliberate remaining shortcuts, each marked `ponytail:` in code where it lives:
 
@@ -175,7 +176,6 @@ Deliberate remaining shortcuts, each marked `ponytail:` in code where it lives:
   simple; JSON-array claims would be cleaner.
 - **Usage-layer duties** (no redistribution, delete after expiry) are recorded and audited, not
   technically enforced after the payload leaves the provider.
-- **EDC Management API v3** is used throughout; EDC 0.17.0 logs that it is deprecated in favour of v4.
 - **Credential status checks**: if an IdentityHub cannot reach the issuer's status list, EDC
   marks the credentials ERROR and does not recover them; startup ordering prevents it, and
   `./seed-identity.sh` re-issues any credential that is not ISSUED.
