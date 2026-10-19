@@ -43,6 +43,13 @@ public class ConnectorClient {
         this.federatedCatalogUrl = federatedCatalogUrl;
     }
 
+    /** True if {@code key} is the Management API key of {@code connectorName} (constant-time compare). */
+    public boolean isConnectorKey(String connectorName, String key) {
+        var expected = keys.get(connectorName);
+        return expected != null && key != null && java.security.MessageDigest.isEqual(
+                expected.getBytes(java.nio.charset.StandardCharsets.UTF_8), key.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    }
+
     public String federatedCatalogUrl() {
         return federatedCatalogUrl;
     }

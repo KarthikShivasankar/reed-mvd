@@ -222,7 +222,7 @@ export class ApiError extends Error {
 }
 
 const MGMT_CONTEXT = ["https://w3id.org/edc/connector/management/v2"];
-/** Management API v4 needs the management/v2 context and an explicit @type (the EDR cache stays on v3). */
+/** Management API v4 needs the management/v2 context and an explicit @type. */
 const QUERY = { "@context": MGMT_CONTEXT, "@type": "QuerySpec", offset: 0, limit: 50 };
 const DSP = "dataspace-protocol-http:2025-1";
 
@@ -321,7 +321,8 @@ export class Api {
     });
   }
   transferProcess(consumer: string, id: string) { return this.mgmt(consumer, "GET", `/v4/transferprocesses/${seg(id)}`); }
-  edr(consumer: string, transferId: string) { return this.mgmt(consumer, "GET", `/v3/edrs/${seg(transferId)}/dataaddress`); }
+  /** EDR delivered to the backend by the connector's transfer.process.started callback (404 until then). */
+  edr(consumer: string, transferId: string) { return this.call<any>("GET", `/reed/connectors/${seg(consumer)}/edrs/${seg(transferId)}`); }
   list(consumer: string, kind: "contractnegotiations" | "transferprocesses") {
     return this.mgmt<any[]>(consumer, "POST", `/v4/${kind}/request`, QUERY).then((j) => (Array.isArray(j) ? j : [j]));
   }

@@ -91,7 +91,7 @@ export const STEPS: Step[] = [
     color: C.violet,
     blurb:
       "The provider data plane mints an Endpoint Data Reference — a short-lived ES256 JWT pointing at the provider's public data-plane proxy — and delivers it into the consumer's EDR cache. This is how 'payload only after contract' is enforced on the wire.",
-    wire: "consumer → GET /v3/edrs/{transferId}/dataaddress → { endpoint, authorization: <ES256 JWT> }",
+    wire: "consumer CP → transfer.process.started callback → REED backend → { endpoint, authorization: <ES256 JWT> }",
   },
   {
     id: "pull",

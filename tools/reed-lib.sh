@@ -8,7 +8,7 @@ source "$ROOT/deployment/.env"; set +a
 REED_BACKEND="${REED_BACKEND:-http://localhost:8081}"
 KEYCLOAK="${KEYCLOAK:-http://localhost:8180}"
 DEMO_PASSWORD="$(jq -r .dataspace.demoPassword "$ROSTER")"
-CTX='["https://w3id.org/edc/connector/management/v2"]'   # Management API v4 (EDR cache: v3, CEL: v5beta)
+CTX='["https://w3id.org/edc/connector/management/v2"]'   # Management API v4 (CEL rules: v5beta)
 QS='{"@context":["https://w3id.org/edc/connector/management/v2"],"@type":"QuerySpec","limit":500}'
 PROTO="dataspace-protocol-http:2025-1"
 
@@ -85,9 +85,12 @@ negotiate() {
 }
 
 # pull <consumer> <provider> <agreementId> -> payload (HttpData-PULL transfer + EDR + data-plane GET)
+# The transfer is started through the REED backend relay, which registers the transfer.process.started
+# callback; the consumer connector then delivers the EDR to the backend (no EDR-cache polling).
 pull() {
-  local c=$1 p=$2 agr=$3 tp st edr
-  tp=$(mgmt "$c" POST /v4/transferprocesses '{"@context": '"$CTX"', "@type": "TransferRequest",
+  local c=$1 p=$2 agr=$3 tp st edr admin
+  admin=$(token reed-admin)
+  tp=$(api "$admin" POST "/reed/connectors/$c/v4/transferprocesses" '{"@context": '"$CTX"', "@type": "TransferRequest",
     "counterPartyAddress": "'"$(dsp_of "$p")"'", "protocol": "'$PROTO'",
     "contractId": "'"$agr"'", "transferType": "HttpData-PULL"}' | jq -r '."@id"')
   for _ in $(seq 1 45); do
@@ -97,8 +100,8 @@ pull() {
   done
   [[ $st == STARTED ]] || { echo "transfer $tp ended $st" >&2; return 1; }
   for _ in $(seq 1 20); do
-    edr=$(mgmt "$c" GET "/v3/edrs/$tp/dataaddress" 2>/dev/null || true)
-    [[ -n $edr ]] && break
+    edr=$(api "$admin" GET "/reed/connectors/$c/edrs/$tp")
+    [[ $(status) == 200 ]] && break
     sleep 1
   done
   curl -fsS "$(jq -r .endpoint <<<"$edr")" -H "Authorization: $(jq -r .authorization <<<"$edr")"
