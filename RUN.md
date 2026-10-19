@@ -20,8 +20,8 @@ Writes the compose file, connector/IdentityHub/issuer configs, the Vault init sc
 Postgres init script, the Keycloak realm, the dashboard config, EC P-256 keys under
 `deployment/vault/keys/` (gitignored) and **`deployment/.env`** (mode 600, gitignored, kept across
 runs) with generated secrets: Management API keys, per-identity IdentityHub admin keys and Vault
-tokens, the issuer key, the Postgres and Keycloak admin passwords, the submodel master key and the
-LiteLLM key. Re-run after every roster change; it is idempotent.
+tokens, the issuer key, the Postgres and Keycloak admin passwords, per-company data and callback keys and
+the LiteLLM key. Re-run after every roster change; it is idempotent.
 
 ## 2. Build the jars
 

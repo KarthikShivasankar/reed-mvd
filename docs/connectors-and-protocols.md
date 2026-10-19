@@ -9,7 +9,8 @@ Every container in the REED stack, its ports, and who talks to whom. Generated f
 |---|---|---|
 | `reed-dashboard` | 8088 | React SPA (nginx). Talks to Keycloak, the REED backend and providers' public data planes. |
 | `reed-keycloak` | 8180 | OIDC login for people; realm `reed` |
-| `reed-backend` | 8081 | REED registry, matchmaking, assistant, relay to Management APIs, submodel store (Postgres) |
+| `reed-backend` | 8081 | REED registry, matchmaking, assistant, relay to Management APIs, usage decisions, EDC callbacks (Postgres) |
+| `reed-<name>-data` (7×) | - | each company's data service: its confidential payloads, released under licence |
 | `reed-litellm` | 4000 | OpenAI-compatible gateway → Ollama `qwen3.8` on the host, or `reed-vllm` |
 | `reed-vllm` | 8000 | *(profile `vllm`)* Qwen3.8 NVFP4 on the GPU |
 | `reed-<name>-ih` (7×) | `<p>081` | one IdentityHub per company and for the operator: DID, keys, verifiable credentials, STS |
@@ -51,7 +52,9 @@ API is published on `<p>081`. Every published port is bound to `127.0.0.1`.
 | issuerservice | postgres `reed` | `vc_*` views | JDBC | attestations |
 | federated-catalog | all connectors | `<p>194` | DSP | crawl every 15 s |
 | browser | provider | `<p>291/public` | HTTP + EDR JWT | pull the confidential payload |
-| provider data plane | reed-backend | `reed-backend:8080/reed/submodels` | HTTP + per-owner key + consumer DID | fetch the payload it streams back; the backend audits who pulled it |
+| provider data plane | its own `<name>-data` | `:8090/submodels/<asset>` | HTTP + data key + consumer DID | fetch the payload it streams back |
+| `<name>-data` | reed-backend | `:8080/reed/usage/decide` | HTTP + data key | usage decision (agreement, expiry), audited |
+| consumer connector | reed-backend | `:8080/reed/edc-callbacks/<name>` | HTTP + callback key | deliver the EDR (transfer.process.started) |
 | every EDC runtime | vault | `vault:8200` `secret/<name>/` | Vault HTTP + own token | keys and secrets, confined to its own folder |
 
 ## The URL rule

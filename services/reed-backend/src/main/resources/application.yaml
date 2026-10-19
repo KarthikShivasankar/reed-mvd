@@ -19,8 +19,6 @@ spring:
     baseline-version: 0
 
 reed:
-  # Static key the EDC data-plane proxies present (authCode) to pull submodel payloads.
-  api-key: ${REED_API_KEY:reed-submodel-key}
   # roster.json + scenarios/matchmaking.json (bind-mounted from deployment/).
   deployment-dir: ${REED_DEPLOYMENT_DIR:/app/deployment}
   internal-url: ${REED_INTERNAL_URL:http://reed-backend:8080}
@@ -36,6 +34,8 @@ reed:
   connectors:
     # name=key pairs for each connector's Management API (generated into deployment/.secrets/.env).
     keys: ${REED_MGMT_KEYS:}
+    # name=key pairs: each connector's low-privilege key for posting EDC callbacks (EDRs) to REED.
+    callback-keys: ${REED_CALLBACK_KEYS:}
     federated-catalog-url: ${REED_FC_URL:http://federated-catalog:39193/management}
   llm:
     # Local OpenAI-compatible gateway (LiteLLM -> Ollama / vLLM serving Qwen3.8). Nothing leaves the deployment.
@@ -44,6 +44,12 @@ reed:
     api-key: ${REED_LLM_API_KEY:sk-reed-local}
     model: ${REED_LLM_MODEL:reed-llm}
     timeout-seconds: ${REED_LLM_TIMEOUT:90}
+  usage:
+    # name=key pairs of the companies' data services (they call /reed/usage/decide with them).
+    data-keys: ${REED_DATA_KEYS:}
+    data-service-url: ${REED_DATA_SERVICE_URL:http://{name}-data:8090}
+    # validity of a time-limited (pilot) licence after the contract is signed
+    pilot-days: ${REED_PILOT_DAYS:30}
   match:
     weights:
       lead: 0.20

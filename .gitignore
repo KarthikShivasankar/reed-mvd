@@ -80,3 +80,10 @@ vault/
 # Playwright
 .playwright-mcp/
 playwright-report/
+
+# Generated confidential payloads (tools/gen_topology.py)
+deployment/payloads/
+
+# Python
+__pycache__/
+*.pyc

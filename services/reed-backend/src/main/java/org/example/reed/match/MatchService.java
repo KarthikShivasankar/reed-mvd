@@ -17,6 +17,8 @@ import org.example.reed.domain.MatchRecord;
 import org.example.reed.domain.Participant;
 import org.example.reed.domain.Rfq;
 import org.example.reed.edc.ConnectorClient;
+import org.example.reed.edc.EdrStore;
+import org.springframework.web.client.RestClient;
 import org.example.reed.participant.CredentialVerifier;
 import org.example.reed.participant.Roster;
 import org.example.reed.repo.AssetRepository;
@@ -36,6 +38,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.regex.Pattern;
 import java.util.Set;
@@ -73,13 +76,14 @@ public class MatchService {
     private final CatalogueService catalogue;
     private final ConnectorClient connectors;
     private final ObjectMapper mapper;
+    private final EdrStore edrs;
     private final MatchScorer scorer;
     private final Clock clock;
 
     public MatchService(ParticipantRepository participants, RfqRepository rfqs, MatchRepository matches,
                         AssetRepository assets, AuditEventRepository audit, CredentialVerifier credentials,
                         CatalogueService catalogue, ConnectorClient connectors, ObjectMapper mapper,
-                        MatchScorer.Weights weights, Clock clock) {
+                        MatchScorer.Weights weights, Clock clock, EdrStore edrs) {
         this.participants = participants;
         this.rfqs = rfqs;
         this.matches = matches;
@@ -90,6 +94,7 @@ public class MatchService {
         this.connectors = connectors;
         this.mapper = mapper;
         this.scorer = new MatchScorer(weights);
+        this.edrs = edrs;
         this.clock = clock;
     }
 
@@ -183,7 +188,7 @@ public class MatchService {
      * against the RFQ - a public claim the detail does not back up rejects the
      * match and counts against the supplier's track record.
      */
-    @Transactional
+    // Not @Transactional: the confirmation waits for an EDC transfer, which must not hold a DB transaction.
     public MatchRecord confirm(MatchRecord m, String agreementId) {
         expect(m, MatchRecord.State.ACCEPTED);
         var buyer = participant(m.buyerBpn);
@@ -209,7 +214,7 @@ public class MatchService {
                     + consumer + " and " + provider + ", not between this buyer and supplier");
         }
         m.agreementId = agreementId;
-        var contradictions = contradictions(rfqs.findById(m.rfqId).orElseThrow(), m.detailAssetId);
+        var contradictions = contradictions(rfqs.findById(m.rfqId).orElseThrow(), pullDetail(buyer, supplier, agreementId));
         if (contradictions.isEmpty()) {
             m.state = MatchRecord.State.CONFIRMED;
             m.note = "EDC agreement " + agreementId + " verified; confidential capability confirms the claim";
@@ -291,12 +296,52 @@ public class MatchService {
         return assets.findFirstByOwnerBpnAndAssetClass(bpn, AssetClass.ProcessCapability).map(a -> a.assetId).orElse(null);
     }
 
+    /**
+     * Pulls the supplier's confidential capability the way the buyer would: a transfer on the buyer's own
+     * connector under the agreement, the EDR delivered by callback, then a GET on the supplier's data
+     * plane. REED acts here as the buyer's agent; the payload is checked, never stored.
+     */
+    private JsonNode pullDetail(Participant buyer, Participant supplier, String agreementId) {
+        try {
+            var request = mapper.writeValueAsString(Map.of(
+                    "@context", List.of("https://w3id.org/edc/connector/management/v2"), "@type", "TransferRequest",
+                    "counterPartyAddress", supplier.dspUrl, "protocol", "dataspace-protocol-http:2025-1",
+                    "contractId", agreementId, "transferType", "HttpData-PULL"));
+            request = connectors.withServerCallbacks(buyer.connectorName, request, true);
+            var tp = readJson(connectors.post(buyer.connectorName, buyer.managementUrl, "/v4/transferprocesses", request))
+                    .path("@id").asText();
+            EdrStore.Edr edr = null;
+            for (int i = 0; i < 60 && edr == null; i++) {
+                edr = edrs.get(buyer.connectorName, tp).orElse(null);
+                if (edr == null) {
+                    Thread.sleep(500);
+                }
+            }
+            if (edr == null) {
+                return null;
+            }
+            // The EDR names the browser-facing endpoint (localhost); inside the network the supplier's
+            // connector is reached by its service name.
+            var endpoint = java.net.URI.create(edr.endpoint());
+            var internal = "localhost".equals(endpoint.getHost())
+                    ? new java.net.URI(endpoint.getScheme(), null, supplier.connectorName, endpoint.getPort(),
+                    endpoint.getPath(), endpoint.getQuery(), null).toString()
+                    : edr.endpoint();
+            return readJson(RestClient.create().get().uri(internal).header("Authorization", edr.authorization())
+                    .retrieve().body(String.class));
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return null;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     /** Hard-filter checks of the RFQ against the supplier's confidential (contracted) capability. */
-    private List<String> contradictions(Rfq rfq, String detailAssetId) {
-        var payload = assets.findById(detailAssetId).map(a -> readJson(a.payload)).orElse(null);
+    private List<String> contradictions(Rfq rfq, JsonNode payload) {
         var out = new ArrayList<String>();
         if (payload == null) {
-            out.add("no confidential capability on record");
+            out.add("confidential capability could not be retrieved over EDC");
             return out;
         }
         var env = payload.path("envelopeMm");

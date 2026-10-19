@@ -7,7 +7,6 @@
 package org.example.reed.seed;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.example.reed.config.ReedProperties;
 import org.example.reed.domain.Asset;
 import org.example.reed.domain.AssetClass;
@@ -35,11 +34,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
-import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.LocalDate;
@@ -208,7 +205,7 @@ public class DataSeeder implements CommandLineRunner {
         }
     }
 
-    private void seedAsset(Roster.ParticipantSpec owner, AssetClass cls) throws Exception {
+    private void seedAsset(Roster.ParticipantSpec owner, AssetClass cls) {
         var c = classifications.findById(cls).orElseThrow();
         var a = new Asset(cls.kebab() + "-" + owner.connector().name(), cls, owner.bpn());
         a.title = cls.title() + " - " + owner.shortName();
@@ -217,23 +214,13 @@ public class DataSeeder implements CommandLineRunner {
         a.discoverability = c.discoverability;
         a.policyTemplate = c.defaultPolicyTemplate;
 
-        ObjectNode payload;
         if (cls == AssetClass.ProcessCapability && owner.confidentialCapability() != null) {
             // A supplier's detailed capability: discoverable to all members (so buyers can find
-            // and negotiate it during matchmaking), but only OEMs may contract for it.
+            // and negotiate it during matchmaking), but only OEMs may contract for it. The payload
+            // itself is held by the supplier's own data service (written by tools/gen_topology.py).
             a.discoverability = Discoverability.consortium;
             a.description = "Confidential detail behind the public capability claim: " + owner.capability().summary();
-            payload = owner.confidentialCapability().deepCopy();
-        } else {
-            var resource = new ClassPathResource("submodels/" + cls.kebab() + ".json");
-            try (var in = resource.getInputStream()) {
-                payload = (ObjectNode) mapper.readTree(new String(in.readAllBytes(), StandardCharsets.UTF_8));
-            }
         }
-        payload.put("assetClass", cls.name());
-        payload.put("owner", owner.name());
-        payload.put("ownerBpn", owner.bpn());
-        a.payload = mapper.writeValueAsString(payload);
         assets.save(a);
     }
 

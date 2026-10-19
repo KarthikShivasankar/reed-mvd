@@ -7,10 +7,8 @@
 package org.example.reed.web;
 
 import jakarta.servlet.http.HttpServletRequest;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.example.reed.edc.ConnectorClient;
 import org.example.reed.edc.EdrStore;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.example.reed.repo.ParticipantRepository;
 import org.example.reed.security.CurrentUser;
@@ -25,14 +23,18 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 /**
  * Backend-for-frontend for the EDC Management APIs. The dashboard never holds a
  * connector key: it calls {@code /reed/connectors/{name}/...} with its user
  * token, and this controller forwards to that connector only if the user
  * belongs to the organisation running it (or is an admin), adding the key
- * server-side. The federated catalog is readable by every member.
+ * server-side. Only an allowlist of calls is relayed, and callback addresses are always set by the
+ * server (callers could otherwise make the connector post a secret to a URL of their choice). The
+ * federated catalog is readable by every member.
  */
 @RestController
 public class ConnectorProxyController {
@@ -40,16 +42,11 @@ public class ConnectorProxyController {
     private final ConnectorClient client;
     private final ParticipantRepository participants;
     private final EdrStore edrs;
-    private final ObjectMapper mapper;
-    private final String callbackBase;
 
-    public ConnectorProxyController(ConnectorClient client, ParticipantRepository participants, EdrStore edrs,
-                                    ObjectMapper mapper, @Value("${reed.internal-url}") String callbackBase) {
+    public ConnectorProxyController(ConnectorClient client, ParticipantRepository participants, EdrStore edrs) {
         this.client = client;
         this.participants = participants;
         this.edrs = edrs;
-        this.mapper = mapper;
-        this.callbackBase = callbackBase;
     }
 
     @RequestMapping("/reed/connectors/{name}/**")
@@ -63,11 +60,27 @@ public class ConnectorProxyController {
                     "user " + user.username() + " may only operate its own organisation's connector");
         }
         var path = request.getRequestURI().substring(("/reed/connectors/" + name).length());
-        if ("POST".equals(request.getMethod()) && path.matches("/v4/transferprocesses/?")) {
-            body = withEdrCallback(name, body);
+        var method = request.getMethod();
+        if (ALLOWED.stream().noneMatch(a -> a.method().equals(method) && a.path().matcher(path).matches())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, method + " " + path + " is not available through the REED relay");
         }
-        return relay(client.exchange(name, p.managementUrl, HttpMethod.valueOf(request.getMethod()), path, body));
+        if ("POST".equals(method) && path.matches("/v4/(transferprocesses|contractnegotiations)/?")) {
+            body = client.withServerCallbacks(name, body, path.contains("transferprocesses"));
+        }
+        return relay(client.exchange(name, p.managementUrl, HttpMethod.valueOf(method), path, body));
     }
+
+    private record Route(String method, Pattern path) {
+    }
+
+    /**
+     * The Management API calls the dashboard needs - nothing else is relayed (no asset, policy or secret
+     * management, which stays with the operator's seeding).
+     */
+    private static final List<Route> ALLOWED = List.of(
+            new Route("POST", Pattern.compile("/v4/catalog/request")),
+            new Route("POST", Pattern.compile("/v4/(contractnegotiations|transferprocesses|contractagreements)(/request)?/?")),
+            new Route("GET", Pattern.compile("/v4/(contractnegotiations|transferprocesses|contractagreements)/[A-Za-z0-9:_.-]{1,128}")));
 
     /**
      * The EDR of a transfer started through this relay, as delivered by the consumer connector's
@@ -86,26 +99,6 @@ public class ConnectorProxyController {
                 .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", "no EDR received yet")));
     }
 
-    /** Adds the callback that delivers the EDR to the REED backend (unless the caller set its own). */
-    private String withEdrCallback(String connector, String body) {
-        try {
-            var json = (com.fasterxml.jackson.databind.node.ObjectNode) mapper.readTree(body);
-            if (!json.has("callbackAddresses")) {
-                var cb = json.putArray("callbackAddresses").addObject();
-                cb.put("@type", "CallbackAddress");
-                cb.put("uri", callbackBase + "/reed/edc-callbacks/" + connector);
-                cb.putArray("events").add("transfer.process.started");
-                cb.put("transactional", false);
-                // Full IRIs: the management/v2 context does not define these terms, so short names are dropped.
-                cb.put("https://w3id.org/edc/v0.0.1/ns/authKey", "X-Api-Key");
-                cb.put("https://w3id.org/edc/v0.0.1/ns/authCodeId", connector + "-mgmt-api-key"); // its own key, from its Vault folder
-            }
-            return mapper.writeValueAsString(json);
-        } catch (Exception e) {
-            return body; // not JSON: let the connector reject it
-        }
-    }
-
     @RequestMapping("/reed/federated-catalog/**")
     public ResponseEntity<String> federatedCatalog(@AuthenticationPrincipal Jwt jwt, HttpServletRequest request,
                                                    @RequestBody(required = false) String body) {
@@ -114,8 +107,10 @@ public class ConnectorProxyController {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "only consortium members may query the federated catalog");
         }
         var path = request.getRequestURI().substring("/reed/federated-catalog".length());
-        return relay(client.exchange("federated-catalog", client.federatedCatalogUrl(),
-                HttpMethod.valueOf(request.getMethod()), path, body));
+        if (!"POST".equals(request.getMethod()) || !path.matches("/v4/catalogs/request/?")) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "only catalog queries are relayed to the federated catalog");
+        }
+        return relay(client.exchange("federated-catalog", client.federatedCatalogUrl(), HttpMethod.POST, path, body));
     }
 
     private static ResponseEntity<String> relay(ResponseEntity<String> res) {

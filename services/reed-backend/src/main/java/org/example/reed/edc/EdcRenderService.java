@@ -12,6 +12,7 @@ import org.example.reed.domain.Asset;
 import org.example.reed.domain.Discoverability;
 import org.example.reed.policy.PolicyTemplateRenderer;
 import org.example.reed.repo.AssetRepository;
+import org.example.reed.repo.ParticipantRepository;
 import org.example.reed.repo.PolicyTemplateRepository;
 import org.springframework.stereotype.Service;
 
@@ -59,13 +60,21 @@ public class EdcRenderService {
     private final PolicyTemplateRepository templates;
     private final PolicyTemplateRenderer renderer;
     private final ReedProperties props;
+    private final ParticipantRepository participants;
+    private final java.util.Map<String, String> dataKeys;
+    private final String dataServiceUrl;
 
     public EdcRenderService(AssetRepository assets, PolicyTemplateRepository templates,
-                            PolicyTemplateRenderer renderer, ReedProperties props) {
+                            PolicyTemplateRenderer renderer, ReedProperties props, ParticipantRepository participants,
+                            @org.springframework.beans.factory.annotation.Value("${reed.usage.data-keys:}") String dataKeys,
+                            @org.springframework.beans.factory.annotation.Value("${reed.usage.data-service-url}") String dataServiceUrl) {
         this.assets = assets;
         this.templates = templates;
         this.renderer = renderer;
         this.props = props;
+        this.participants = participants;
+        this.dataKeys = ConnectorClient.parse(dataKeys);
+        this.dataServiceUrl = dataServiceUrl;
     }
 
     private boolean dcp() {
@@ -112,13 +121,14 @@ public class EdcRenderService {
         dataAddress.put("@type", "DataAddress");
         dataAddress.put("type", "HttpData");
         dataAddress.put("name", a.assetId);
-        dataAddress.put("baseUrl", props.getInternalUrl() + "/reed/submodels/" + a.assetId);
+        // The owner's own data service (one per company) holds and releases the payload.
+        var owner = participants.findById(a.ownerBpn).map(p -> p.connectorName).orElse(a.ownerBpn);
+        dataAddress.put("baseUrl", dataServiceUrl.replace("{name}", owner) + "/submodels/" + a.assetId);
         dataAddress.put("proxyPath", "false");
         dataAddress.put("proxyQueryParams", "false");
-        // The provider's data-plane proxy presents this header to the submodel service; the key is
-        // specific to the owner, so it never unlocks another participant's payloads.
+        // The owner's data plane presents the owner's data key to its own data service.
         dataAddress.put("authKey", "X-Api-Key");
-        dataAddress.put("authCode", props.ownerKey(a.ownerBpn));
+        dataAddress.put("authCode", dataKeys.getOrDefault(owner, ""));
 
         var asset = new LinkedHashMap<String, Object>();
         asset.put("@context", List.of(MANAGEMENT_CONTEXT));

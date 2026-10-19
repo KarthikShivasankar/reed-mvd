@@ -6,22 +6,19 @@
 
 package org.example.reed.domain;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
 
 /**
  * Table {@code reed_asset}: one concrete data asset owned by one participant.
  * Sensitivity / discoverability / policy template default to the classification
  * matrix row of its class but may be overridden per asset. The confidential
- * {@code payload} is only ever served by the submodel service to the owner's
- * data plane after a contract - never by the catalogue APIs.
+ * payload is NOT here: it lives with the owner's own data service and leaves it
+ * only through the owner's EDC data plane, after a contract and a usage decision.
  */
 @Entity
 @Table(name = "reed_asset")
@@ -47,10 +44,6 @@ public class Asset {
     public Discoverability discoverability;
 
     public String policyTemplate;
-
-    @JsonIgnore
-    @JdbcTypeCode(SqlTypes.JSON)
-    public String payload;
 
     protected Asset() {
     }

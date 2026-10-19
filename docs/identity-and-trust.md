@@ -119,8 +119,19 @@ key in Vault, value in `deployment/.env`). The dashboard reaches it only through
 running `{name}` and adds the key server-side. EDR payload pulls go straight from the browser to
 the provider's data plane - the short-lived EDR token is the authorisation.
 
-## Submodel service keys
+## Data services and their keys
 
-Provider data planes fetch payloads from `reed-backend /reed/submodels/{assetId}` with an
-`X-Api-Key` derived per owner (`HMAC-SHA256(master key, owner BPN)`). A member can read its own
-key from its own asset data addresses, but that key unlocks only its own payloads.
+Each connector company runs its own data service (`<name>-data`, not published to the host) holding
+its confidential payloads. Its EDC data plane fetches a payload with the company's data key (in the
+asset's data address) and names the consumer from the verified EDR token (`X-Edc-Consumer`). The
+data service asks REED for a usage decision (`POST /reed/usage/decide`, authenticated with the same
+data key): the consumer must be a known member holding a contract agreement for that asset on the
+owner's connector, and time-limited pilot licences must not have expired. Otherwise it refuses,
+and it refuses too when REED cannot be reached. Released payloads carry `_reedLicense` (licensee,
+agreement, expiry, prohibitions, obligations) and an HMAC watermark over payload + licence.
+
+## EDC callbacks
+
+The relay sets a `transfer.process.started` callback on every transfer, replacing anything the
+caller sent. The connector posts the EDR to `/reed/edc-callbacks/<name>` authenticated with
+`<name>-callback-key` (a low-privilege secret in its Vault folder, used for nothing else).

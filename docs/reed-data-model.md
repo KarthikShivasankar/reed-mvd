@@ -16,7 +16,7 @@ Hibernate only validates). Seeded on an empty database by `seed/DataSeeder.java`
 | Table | Purpose |
 |---|---|
 | `reed_participant` | member directory: BPN, name, role, country/city, VAT id, location, quay/rail access, sectors, connector, DID, attested certifications, public capability claim (JSON) |
-| `reed_asset` | one concrete asset per row: class, **owner**, sensitivity, discoverability, policy template, confidential payload (JSON) |
+| `reed_asset` | one concrete asset per row: class, **owner**, sensitivity, discoverability, policy template (metadata only - payloads stay with the owner's data service) |
 | `reed_asset_classification` | the classification matrix: defaults per asset class |
 | `reed_policy_template` | named ODRL templates (permission constraints on credentials + usage duties) |
 | `reed_supply_chain_relation` | BPN → BPN edges: `OWNS`, `SUPPLIES`, `PROJECT_MEMBER` |
@@ -73,5 +73,7 @@ with the owner), `dpp-read-only` (membership, no modification), `oem-only` (role
 | `/connectors/{name}/**`, `/federated-catalog/**` | relay to EDC Management APIs |
 | `GET /audit`, `GET/POST /access-requests` | audit trail, access requests |
 | `GET /edc/{assets\|policydefinitions\|contractdefinitions}?owner=`, `GET /edc/celexpressions` | rendered EDC payloads (admin) |
-| `GET /submodels/{assetId}` | **no token**: per-owner `X-Api-Key`, called by provider data planes |
+| `POST /usage/decide` | **no token**: a company's data key; usage decision before a payload is released |
+| `POST /edc-callbacks/{connector}` | **no token**: the connector's callback key; EDRs from `transfer.process.started` |
+| `GET /connectors/{name}/edrs/{transferId}` | the EDR of a transfer started through the relay |
 | `GET /health`, `GET /scenarios` | **no token** |

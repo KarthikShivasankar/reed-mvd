@@ -27,7 +27,8 @@ import java.util.Map;
  * Receives EDC callback events from the connectors. A consumer connector posts
  * {@code TransferProcessStarted} here (the relay registers this callback on every transfer it
  * starts), carrying the endpoint data reference for the pull. The connector authenticates with its
- * own Management API key, which it reads from its Vault folder ({@code authCodeId}).
+ * callback key ({@code <connector>-callback-key} in its Vault folder) - a low-privilege secret that
+ * only lets it post events here, never its Management API key.
  */
 @RestController
 public class EdcCallbackController {
@@ -46,7 +47,7 @@ public class EdcCallbackController {
     public ResponseEntity<Void> event(@PathVariable String connector,
                                       @RequestHeader(value = "X-Api-Key", required = false) String key,
                                       @RequestBody JsonNode event) {
-        if (!connectors.isConnectorKey(connector, key)) {
+        if (!connectors.isCallbackKey(connector, key)) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
         var payload = event.path("payload");

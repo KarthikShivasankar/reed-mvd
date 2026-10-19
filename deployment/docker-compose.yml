@@ -37,12 +37,19 @@ services:
       VAULT_TOKEN_FEDERATED_CATALOG: ${VAULT_TOKEN_FEDERATED_CATALOG}
       VAULT_TOKEN_ISSUER: ${VAULT_TOKEN_ISSUER}
       MGMT_KEY_NORDVIND: ${MGMT_KEY_NORDVIND}
+      CALLBACK_KEY_NORDVIND: ${CALLBACK_KEY_NORDVIND}
       MGMT_KEY_HANSE: ${MGMT_KEY_HANSE}
+      CALLBACK_KEY_HANSE: ${CALLBACK_KEY_HANSE}
       MGMT_KEY_CASTELLUM: ${MGMT_KEY_CASTELLUM}
+      CALLBACK_KEY_CASTELLUM: ${CALLBACK_KEY_CASTELLUM}
       MGMT_KEY_WISLA: ${MGMT_KEY_WISLA}
+      CALLBACK_KEY_WISLA: ${CALLBACK_KEY_WISLA}
       MGMT_KEY_MAASVLAKTE: ${MGMT_KEY_MAASVLAKTE}
+      CALLBACK_KEY_MAASVLAKTE: ${CALLBACK_KEY_MAASVLAKTE}
       MGMT_KEY_RHEIN_NDT: ${MGMT_KEY_RHEIN_NDT}
+      CALLBACK_KEY_RHEIN_NDT: ${CALLBACK_KEY_RHEIN_NDT}
       MGMT_KEY_KOMATSU: ${MGMT_KEY_KOMATSU}
+      CALLBACK_KEY_KOMATSU: ${CALLBACK_KEY_KOMATSU}
       MGMT_KEY_FEDERATED_CATALOG: ${MGMT_KEY_FEDERATED_CATALOG}
     volumes:
       - ./vault-init/init.sh:/init.sh:ro
@@ -140,8 +147,9 @@ services:
       REED_DB_URL: jdbc:postgresql://postgres:5432/reed
       REED_DB_USER: reed
       REED_DB_PASSWORD: ${POSTGRES_PASSWORD}
-      REED_API_KEY: ${REED_SUBMODEL_KEY}
       REED_MGMT_KEYS: ${REED_MGMT_KEYS}
+      REED_CALLBACK_KEYS: ${REED_CALLBACK_KEYS}
+      REED_DATA_KEYS: ${REED_DATA_KEYS}
       REED_DID_PATTERN: "did:web:{name}-ih%3A7083:{name}"
       REED_LLM_API_KEY: ${LITELLM_MASTER_KEY}
       REED_LLM_MODEL: ${REED_LLM_MODEL:-reed-llm}
@@ -435,6 +443,23 @@ services:
       - ./nordvind/config.properties:/app/config/config.properties:ro
     ports: ["127.0.0.1:19193:19193", "127.0.0.1:19291:19291"]   # Management API (key-protected) + public data plane
 
+  # Nordvind's own data service: holds its confidential payloads, releases them only to its data
+  # plane, after a REED usage decision, stamped with a licence + watermark. Not published to the host.
+  nordvind-data:
+    image: reed/data-service:local
+    build:
+      context: ../services/data-service
+    container_name: reed-nordvind-data
+    depends_on:
+      reed-backend:
+        condition: service_healthy
+    environment:
+      COMPANY: nordvind
+      DATA_KEY: ${DATA_KEY_NORDVIND}
+    mem_limit: 128m
+    volumes:
+      - ./payloads/nordvind:/data:ro
+
   # Hanse Marine & Rail GmbH - OEM (Kiel, DE)
   hanse:
     image: reed/connector:local
@@ -456,6 +481,23 @@ services:
     volumes:
       - ./hanse/config.properties:/app/config/config.properties:ro
     ports: ["127.0.0.1:41193:41193", "127.0.0.1:41291:41291"]   # Management API (key-protected) + public data plane
+
+  # Hanse's own data service: holds its confidential payloads, releases them only to its data
+  # plane, after a REED usage decision, stamped with a licence + watermark. Not published to the host.
+  hanse-data:
+    image: reed/data-service:local
+    build:
+      context: ../services/data-service
+    container_name: reed-hanse-data
+    depends_on:
+      reed-backend:
+        condition: service_healthy
+    environment:
+      COMPANY: hanse
+      DATA_KEY: ${DATA_KEY_HANSE}
+    mem_limit: 128m
+    volumes:
+      - ./payloads/hanse:/data:ro
 
   # Castellum Fundición S.L. - SUPPLIER (Bilbao, ES)
   castellum:
@@ -479,6 +521,23 @@ services:
       - ./castellum/config.properties:/app/config/config.properties:ro
     ports: ["127.0.0.1:29193:29193", "127.0.0.1:29291:29291"]   # Management API (key-protected) + public data plane
 
+  # Castellum's own data service: holds its confidential payloads, releases them only to its data
+  # plane, after a REED usage decision, stamped with a licence + watermark. Not published to the host.
+  castellum-data:
+    image: reed/data-service:local
+    build:
+      context: ../services/data-service
+    container_name: reed-castellum-data
+    depends_on:
+      reed-backend:
+        condition: service_healthy
+    environment:
+      COMPANY: castellum
+      DATA_KEY: ${DATA_KEY_CASTELLUM}
+    mem_limit: 128m
+    volumes:
+      - ./payloads/castellum:/data:ro
+
   # Wisła Precision Machining Sp. z o.o. - SUPPLIER (Gdańsk, PL)
   wisla:
     image: reed/connector:local
@@ -500,6 +559,23 @@ services:
     volumes:
       - ./wisla/config.properties:/app/config/config.properties:ro
     ports: ["127.0.0.1:42193:42193", "127.0.0.1:42291:42291"]   # Management API (key-protected) + public data plane
+
+  # Wisła's own data service: holds its confidential payloads, releases them only to its data
+  # plane, after a REED usage decision, stamped with a licence + watermark. Not published to the host.
+  wisla-data:
+    image: reed/data-service:local
+    build:
+      context: ../services/data-service
+    container_name: reed-wisla-data
+    depends_on:
+      reed-backend:
+        condition: service_healthy
+    environment:
+      COMPANY: wisla
+      DATA_KEY: ${DATA_KEY_WISLA}
+    mem_limit: 128m
+    volumes:
+      - ./payloads/wisla:/data:ro
 
   # Maasvlakte Heavy Lift B.V. - SERVICE (Rotterdam, NL)
   maasvlakte:
@@ -523,6 +599,23 @@ services:
       - ./maasvlakte/config.properties:/app/config/config.properties:ro
     ports: ["127.0.0.1:43193:43193", "127.0.0.1:43291:43291"]   # Management API (key-protected) + public data plane
 
+  # Maasvlakte's own data service: holds its confidential payloads, releases them only to its data
+  # plane, after a REED usage decision, stamped with a licence + watermark. Not published to the host.
+  maasvlakte-data:
+    image: reed/data-service:local
+    build:
+      context: ../services/data-service
+    container_name: reed-maasvlakte-data
+    depends_on:
+      reed-backend:
+        condition: service_healthy
+    environment:
+      COMPANY: maasvlakte
+      DATA_KEY: ${DATA_KEY_MAASVLAKTE}
+    mem_limit: 128m
+    volumes:
+      - ./payloads/maasvlakte:/data:ro
+
   # Rhein NDT Prüflabor GmbH - SERVICE (Duisburg, DE)
   rhein-ndt:
     image: reed/connector:local
@@ -545,6 +638,23 @@ services:
       - ./rhein-ndt/config.properties:/app/config/config.properties:ro
     ports: ["127.0.0.1:44193:44193", "127.0.0.1:44291:44291"]   # Management API (key-protected) + public data plane
 
+  # Rhein NDT's own data service: holds its confidential payloads, releases them only to its data
+  # plane, after a REED usage decision, stamped with a licence + watermark. Not published to the host.
+  rhein-ndt-data:
+    image: reed/data-service:local
+    build:
+      context: ../services/data-service
+    container_name: reed-rhein-ndt-data
+    depends_on:
+      reed-backend:
+        condition: service_healthy
+    environment:
+      COMPANY: rhein-ndt
+      DATA_KEY: ${DATA_KEY_RHEIN_NDT}
+    mem_limit: 128m
+    volumes:
+      - ./payloads/rhein-ndt:/data:ro
+
   # Komatsu Mining Germany GmbH - OEM (Düsseldorf, DE)
   komatsu:
     image: reed/connector:local
@@ -566,6 +676,23 @@ services:
     volumes:
       - ./komatsu/config.properties:/app/config/config.properties:ro
     ports: ["127.0.0.1:45193:45193", "127.0.0.1:45291:45291"]   # Management API (key-protected) + public data plane
+
+  # Komatsu's own data service: holds its confidential payloads, releases them only to its data
+  # plane, after a REED usage decision, stamped with a licence + watermark. Not published to the host.
+  komatsu-data:
+    image: reed/data-service:local
+    build:
+      context: ../services/data-service
+    container_name: reed-komatsu-data
+    depends_on:
+      reed-backend:
+        condition: service_healthy
+    environment:
+      COMPANY: komatsu
+      DATA_KEY: ${DATA_KEY_KOMATSU}
+    mem_limit: 128m
+    volumes:
+      - ./payloads/komatsu:/data:ro
 
   # ---------- Federated Catalog (crawls every connector) ----------
   federated-catalog:

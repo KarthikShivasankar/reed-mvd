@@ -49,7 +49,7 @@ public class SecurityConfig {
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(a -> a
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        .requestMatchers("/reed/submodels/**", "/reed/edc-callbacks/**", "/reed/health", "/reed/scenarios").permitAll()
+                        .requestMatchers("/reed/usage/decide", "/reed/edc-callbacks/**", "/reed/health", "/reed/scenarios").permitAll()
                         .requestMatchers("/reed/edc/**").hasRole("admin")
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(o -> o.jwt(j -> j.jwtAuthenticationConverter(roles)));

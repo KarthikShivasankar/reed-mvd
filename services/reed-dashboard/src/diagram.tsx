@@ -14,7 +14,7 @@ import { useEffect, useState } from "react";
    DISCOVERS it (DSP + federated catalog); the two control planes NEGOTIATE a
    contract; the consumer requests a TRANSFER; the provider data plane mints an
    EDR; and only then can the consumer PULL the confidential payload, which the
-   provider data plane fetches from the REED backend submodel store.
+   provider data plane fetches from the provider's own data service.
    ========================================================================= */
 
 export type StepId = "publish" | "discover" | "negotiate" | "transfer" | "edr" | "pull";
@@ -100,8 +100,8 @@ export const STEPS: Step[] = [
     plane: "data plane → REED backend",
     color: C.cyan,
     blurb:
-      "The consumer pulls with the EDR JWT. The provider data plane (http-pull-proxy) verifies the token, then fetches the confidential submodel from the REED backend with the owner's own key and streams it back. Every pull writes an audit event - the usage layer.",
-    wire: "consumer → GET {edr.endpoint} Authorization: <jwt> → provider DP proxy → GET reed-backend /reed/submodels/{assetId} (per-owner X-Api-Key)",
+      "The consumer pulls with the EDR JWT. The provider data plane verifies the token and fetches the payload from the provider's own data service, which first asks REED for a usage decision (a contract agreement is required, pilot licences expire) and stamps the payload with a licence and a watermark. Every decision is audited - the usage layer.",
+    wire: "consumer → GET {edr.endpoint} Authorization: <jwt> → provider DP proxy → provider data service (data key) → REED usage decision → payload + licence",
     layer: "usage layer — ODRL obligations + a PULL audit event on every access",
   },
 ];
@@ -319,7 +319,7 @@ export function Topology({
         <Box x={710} y={292} w={282} h={108} title="Data Plane" sub={`http-pull-proxy :${provider.prefix}291`} variant="dp" active={["edr", "pull"].includes(activeId as string)} />
 
         {/* reed backend */}
-        <Box x={372} y={476} w={296} h={78} title="REED Backend" sub="registry · matchmaking · submodels :8081" variant="backend" active={activeId === "publish" || activeId === "pull"} />
+        <Box x={372} y={476} w={296} h={78} title="REED Backend" sub="registry · matchmaking · usage decisions :8081" variant="backend" active={activeId === "publish" || activeId === "pull"} />
 
         {/* ---- flows ---- */}
         {/* publish: backend renders to provider CP, FC crawls provider CP */}
@@ -341,7 +341,7 @@ export function Topology({
 
         {/* pull: consumer DP -> provider DP, provider DP -> backend */}
         <Flow step={by("pull")} active={activeId} doneIdx={doneIdx} from={[330, 358]} to={[710, 358]} label="pull payload (EDR)" lx={520} ly={376} />
-        <Flow step={by("pull")} active={activeId} doneIdx={doneIdx} d="M 760 400 C 720 460 690 470 660 492" label="fetch submodel" label2="X-Api-Key" lx={770} ly={450} anchor="start" />
+        <Flow step={by("pull")} active={activeId} doneIdx={doneIdx} d="M 760 400 C 720 460 690 470 660 492" label="usage decision" label2="licence + watermark" lx={770} ly={450} anchor="start" />
       </svg>
 
       {/* legend */}

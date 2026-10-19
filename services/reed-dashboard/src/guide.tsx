@@ -81,7 +81,7 @@ export const TAB_HELP: Record<string, TabHelp> = {
     role: "The terms a consumer agrees to: the ODRL policy per template.",
     contains: [
       "Permission constraints on verifiable credentials, e.g. MembershipCredential.role = OEM - enforced by every connector.",
-      "Prohibitions and obligations (no redistribution, audit, delete after expiry) - the usage layer REED records.",
+      "Prohibitions and obligations (no redistribution, audit, delete after expiry) - enforced at release by the owner's data service and carried with every payload as a watermarked licence.",
     ],
     usage: "Read before negotiating to know which credentials a contract will ask for.",
     layer: "usage layer",
@@ -145,7 +145,8 @@ export const COMM_MATRIX: { from: string; to: string; endpoint: string; proto: s
   { from: "issuerservice", to: "postgres reed", endpoint: "vc_* views", proto: "JDBC", use: "attestations from the REED registry" },
   { from: "federated-catalog", to: "all connectors", endpoint: "x194 /protocol/2025-1", proto: "DSP", use: "crawl every 15 s with its own credentials" },
   { from: "browser", to: "provider data plane", endpoint: "x291 /public", proto: "HTTP+JWT", use: "pull the confidential payload with the EDR" },
-  { from: "provider data plane", to: "reed-backend", endpoint: "8080 /reed/submodels", proto: "HTTP+key", use: "fetch the payload with the owner's own key" },
+  { from: "provider data plane", to: "provider data service", endpoint: "8090 /submodels", proto: "HTTP+key", use: "fetch the payload from the company's own data service" },
+  { from: "data service", to: "reed-backend", endpoint: "8080 /reed/usage/decide", proto: "HTTP+key", use: "usage decision: agreement, expiry; audited" },
   { from: "reed-backend", to: "litellm", endpoint: "4000 /v1", proto: "OpenAI API", use: "assistant → Qwen3.8 on Ollama / vLLM (local)" },
 ];
 
@@ -153,7 +154,7 @@ const PROTO_LEGEND: { name: string; desc: string }[] = [
   { name: "DSP", desc: "Dataspace Protocol - JSON-LD between connectors (catalog, negotiation, transfer)." },
   { name: "DCP", desc: "Decentralized Claims Protocol - connectors prove membership, certifications and supply relations with verifiable credentials." },
   { name: "Management", desc: "REST API to drive your own connector. Key-protected; the dashboard reaches it only through the REED backend." },
-  { name: "Public DP", desc: "The payload door - present the EDR JWT; the provider data plane verifies it and proxies to the backend." },
+  { name: "Public DP", desc: "The payload door - present the EDR JWT; the provider data plane verifies it and fetches from the provider's own data service." },
   { name: "OIDC", desc: "Human login via Keycloak; the token carries the user's roles and organisation (BPN)." },
 ];
 

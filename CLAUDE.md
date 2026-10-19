@@ -65,15 +65,23 @@ Spring Boot 3.3 + Postgres, schema by **Flyway** (`db/migration`, Hibernate `val
   only for operators (`admin`, or `quality-auditor` without a BPN).
 - `match/`: `MatchScorer` (pure: hard filters + 6 weighted criteria, deterministic), `MatchService`
   (ranking, partners, opportunities, lifecycle; confirm verifies the EDC agreement on the buyer's
-  connector and checks the confidential payload).
+  connector, then pulls the supplier's confidential capability itself through the buyer's connector +
+  callback EDR - REED acts as the buyer's agent - and checks it; nothing is stored).
 - `assistant/`: `LlmClient` (OpenAI-compatible → LiteLLM), `RuleRfqParser` (numbers are
   authoritative from rules), `PersonalDataRedactor`, `AssistantService` (draft, explain, tool chat;
   explanations with numbers not from the scorer are discarded).
 - `edc/`: `EdcRenderService` renders per-owner assets, access policies (per discoverability) and
   contract policies (template credential constraints) + CEL expressions; `ConnectorClient` calls
   Management APIs with per-connector keys.
-- `web/`: REST controllers incl. `ConnectorProxyController` (BFF relay) and `SubmodelController`
-  (per-owner HMAC key).
+- `web/`: REST controllers incl. `ConnectorProxyController` (BFF relay: **allowlisted** Management API
+  calls only, caller-supplied `callbackAddresses` always replaced) and `EdcCallbackController`.
+- `usage/`: `UsageController` (`POST /reed/usage/decide`, called by the companies' data services with
+  their data key: consumer must hold a contract agreement on the owner's connector, pilot licences
+  expire; every decision is a PULL audit) and `Licence` (pure, unit-tested).
+- The backend holds **no payloads**: each connector company has a data service
+  (`services/data-service`, stdlib Python, `<name>-data`, payloads in `deployment/payloads/<name>/`
+  generated from the roster + `deployment/payload-templates/`, gitignored) that releases a payload
+  only to its own data plane, after a usage decision, stamped with `_reedLicense` + HMAC watermark.
 - `DataSeeder` seeds templates, matrix, participants, assets, relations, history, RFQs.
 
 ### Identity (DCP) - see `docs/identity-and-trust.md`
@@ -102,13 +110,13 @@ Spring Boot 3.3 + Postgres, schema by **Flyway** (`db/migration`, Hibernate `val
   upstream header).
 - Connector stores and CEL expressions are in **Postgres** (`edc_<name>`, SQL BOMs + `cel-store-sql`);
   Keycloak runs in production mode on Postgres. Seeding is needed once per `down -v`.
-- `http-pull-proxy` forwards `X-Edc-Consumer` (the verified EDR token's `aud`) so PULL audits name the consumer (in the detail, cross-checked against a contract agreement on the owner's connector; the key-authenticated owner stays the actor, unknown DIDs are ignored).
+- `http-pull-proxy` forwards `X-Edc-Consumer` (the verified EDR token's `aud`) to the owner's data service, which passes it to the usage decision (known member + contract agreement required).
 - Management APIs: `web.http.management.auth.type=tokenbased`, key alias `<name>-mgmt-api-key` in Vault.
 - Management API **v4** everywhere (v4 needs the `management/v2` context and an explicit `@type`
   on every body, incl. `QuerySpec`); CEL rules on `/v5beta/celexpressions`. EDRs are NOT read from the
   connectors' (v3-only) EDR cache: the backend relay adds a `transfer.process.started` callback to every
-  transfer (`/reed/edc-callbacks/<connector>`, authenticated with the connector's own mgmt key via
-  `authCodeId`; auth properties need full `https://w3id.org/edc/v0.0.1/ns/` IRIs under the v2 context)
+  transfer (`/reed/edc-callbacks/<connector>`, authenticated with the connector's low-privilege
+  `<name>-callback-key` from its Vault folder via `authCodeId` - never the mgmt key; auth properties need full `https://w3id.org/edc/v0.0.1/ns/` IRIs under the v2 context)
   and serves them at `/reed/connectors/<name>/edrs/<transferId>`.
 - All EDC `*/request` list endpoints need a `QuerySpec` body.
 
