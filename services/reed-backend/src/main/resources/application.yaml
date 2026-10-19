@@ -21,33 +21,33 @@ spring:
 reed:
   # roster.json + scenarios/matchmaking.json (bind-mounted from deployment/).
   deployment-dir: ${REED_DEPLOYMENT_DIR:/app/deployment}
-  internal-url: ${REED_INTERNAL_URL:http://reed-backend:8080}
+  internal-url: ${REED_INTERNAL_URL:https://reed-backend:8080}
   # dcp = credential-constrained EDC policies; mock = permissive (iam-mock connectors).
   identity-mode: ${REED_IDENTITY_MODE:dcp}
   did-pattern: ${REED_DID_PATTERN:did:web:{name}-ih%3A7083:{name}}
   cors:
-    origins: ${REED_CORS_ORIGINS:http://localhost:8088}
+    origins: ${REED_CORS_ORIGINS:https://localhost:8088}
   security:
-    jwk-set-uri: ${REED_JWK_SET_URI:http://keycloak:8080/realms/reed/protocol/openid-connect/certs}
-    issuer: ${REED_ISSUER:http://localhost:8180/realms/reed}
+    jwk-set-uri: ${REED_JWK_SET_URI:https://keycloak:8443/realms/reed/protocol/openid-connect/certs}
+    issuer: ${REED_ISSUER:https://localhost:8180/realms/reed}
     audience: ${REED_AUDIENCE:reed-backend}
   connectors:
-    # name=key pairs for each connector's Management API (generated into deployment/.secrets/.env).
+    # name=key pairs for each connector's Management API (generated into deployment/.env).
     keys: ${REED_MGMT_KEYS:}
     # name=key pairs: each connector's low-privilege key for posting EDC callbacks (EDRs) to REED.
     callback-keys: ${REED_CALLBACK_KEYS:}
-    federated-catalog-url: ${REED_FC_URL:http://federated-catalog:39193/management}
+    federated-catalog-url: ${REED_FC_URL:https://federated-catalog:39193/management}
   llm:
     # Local OpenAI-compatible gateway (LiteLLM -> Ollama / vLLM serving Qwen3.8). Nothing leaves the deployment.
     enabled: ${REED_LLM_ENABLED:true}
-    base-url: ${REED_LLM_BASE_URL:http://litellm:4000/v1}
+    base-url: ${REED_LLM_BASE_URL:https://litellm:4000/v1}
     api-key: ${REED_LLM_API_KEY:sk-reed-local}
     model: ${REED_LLM_MODEL:reed-llm}
     timeout-seconds: ${REED_LLM_TIMEOUT:90}
   usage:
     # name=key pairs of the companies' data services (they call /reed/usage/decide with them).
     data-keys: ${REED_DATA_KEYS:}
-    data-service-url: ${REED_DATA_SERVICE_URL:http://{name}-data:8090}
+    data-service-url: ${REED_DATA_SERVICE_URL:https://{name}-data:8090}
     # validity of a time-limited (pilot) licence after the contract is signed
     pilot-days: ${REED_PILOT_DAYS:30}
   match:

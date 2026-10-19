@@ -57,12 +57,18 @@ folder/policy/token per identity, load keys) → Postgres → Keycloak → backe
 one IdentityHub per identity → connectors → federated catalog. Seeding is needed **once**:
 everything persists across `down`/`up`.
 
+All endpoints use TLS with certificates from the local CA in `deployment/tls/` (created by the
+generator; needs `openssl` and `keytool`). Scripts set `CURL_CA_BUNDLE` themselves; for your own
+curl calls use `--cacert deployment/tls/ca.crt`, and import the CA into your browser (README).
+Switching an existing http stack to TLS needs `down -v` and a re-seed: credentials carry their
+status-list URL.
+
 | URL | |
 |---|---|
-| http://localhost:8088 | dashboard (log in as `nordvind-buyer` / `reed-demo`, see README) |
-| http://localhost:8180 | Keycloak (admin console: `admin` / `KEYCLOAK_ADMIN_PASSWORD` in `deployment/.env`) |
-| http://localhost:8081/reed/health | backend health |
-| http://localhost:4000 | LiteLLM (key: `LITELLM_MASTER_KEY` in `deployment/.env`) |
+| https://localhost:8088 | dashboard (log in as `nordvind-buyer` / `reed-demo`, see README) |
+| https://localhost:8180 | Keycloak (admin console: `admin` / `KEYCLOAK_ADMIN_PASSWORD` in `deployment/.env`) |
+| https://localhost:8081/reed/health | backend health |
+| https://localhost:4000 | LiteLLM (key: `LITELLM_MASTER_KEY` in `deployment/.env`) |
 
 ## 4. Verify
 

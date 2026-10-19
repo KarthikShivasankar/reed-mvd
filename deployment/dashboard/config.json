@@ -1,7 +1,7 @@
 {
-  "reedBackendUrl": "http://localhost:8081",
+  "reedBackendUrl": "https://localhost:8081",
   "keycloak": {
-    "url": "http://localhost:8180",
+    "url": "https://localhost:8180",
     "realm": "reed",
     "clientId": "reed-dashboard"
   },
@@ -13,8 +13,8 @@
       "company": "Nordvind Energy Systems AS",
       "short": "Nordvind",
       "participantId": "did:web:nordvind-ih%3A7083:nordvind",
-      "dspUrl": "http://nordvind:19194/protocol/2025-1",
-      "publicUrl": "http://localhost:19291/public/"
+      "dspUrl": "https://nordvind:19194/protocol/2025-1",
+      "publicUrl": "https://localhost:19291/public/"
     },
     {
       "name": "hanse",
@@ -22,8 +22,8 @@
       "company": "Hanse Marine & Rail GmbH",
       "short": "Hanse",
       "participantId": "did:web:hanse-ih%3A7083:hanse",
-      "dspUrl": "http://hanse:41194/protocol/2025-1",
-      "publicUrl": "http://localhost:41291/public/"
+      "dspUrl": "https://hanse:41194/protocol/2025-1",
+      "publicUrl": "https://localhost:41291/public/"
     },
     {
       "name": "castellum",
@@ -31,8 +31,8 @@
       "company": "Castellum Fundición S.L.",
       "short": "Castellum",
       "participantId": "did:web:castellum-ih%3A7083:castellum",
-      "dspUrl": "http://castellum:29194/protocol/2025-1",
-      "publicUrl": "http://localhost:29291/public/"
+      "dspUrl": "https://castellum:29194/protocol/2025-1",
+      "publicUrl": "https://localhost:29291/public/"
     },
     {
       "name": "wisla",
@@ -40,8 +40,8 @@
       "company": "Wisła Precision Machining Sp. z o.o.",
       "short": "Wisła",
       "participantId": "did:web:wisla-ih%3A7083:wisla",
-      "dspUrl": "http://wisla:42194/protocol/2025-1",
-      "publicUrl": "http://localhost:42291/public/"
+      "dspUrl": "https://wisla:42194/protocol/2025-1",
+      "publicUrl": "https://localhost:42291/public/"
     },
     {
       "name": "maasvlakte",
@@ -49,8 +49,8 @@
       "company": "Maasvlakte Heavy Lift B.V.",
       "short": "Maasvlakte",
       "participantId": "did:web:maasvlakte-ih%3A7083:maasvlakte",
-      "dspUrl": "http://maasvlakte:43194/protocol/2025-1",
-      "publicUrl": "http://localhost:43291/public/"
+      "dspUrl": "https://maasvlakte:43194/protocol/2025-1",
+      "publicUrl": "https://localhost:43291/public/"
     },
     {
       "name": "rhein-ndt",
@@ -58,8 +58,8 @@
       "company": "Rhein NDT Prüflabor GmbH",
       "short": "Rhein NDT",
       "participantId": "did:web:rhein-ndt-ih%3A7083:rhein-ndt",
-      "dspUrl": "http://rhein-ndt:44194/protocol/2025-1",
-      "publicUrl": "http://localhost:44291/public/"
+      "dspUrl": "https://rhein-ndt:44194/protocol/2025-1",
+      "publicUrl": "https://localhost:44291/public/"
     },
     {
       "name": "komatsu",
@@ -67,8 +67,8 @@
       "company": "Komatsu Mining Germany GmbH",
       "short": "Komatsu",
       "participantId": "did:web:komatsu-ih%3A7083:komatsu",
-      "dspUrl": "http://komatsu:45194/protocol/2025-1",
-      "publicUrl": "http://localhost:45291/public/"
+      "dspUrl": "https://komatsu:45194/protocol/2025-1",
+      "publicUrl": "https://localhost:45291/public/"
     }
   ]
 }

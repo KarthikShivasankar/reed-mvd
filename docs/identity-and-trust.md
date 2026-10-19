@@ -20,7 +20,7 @@ credentials) from **who a person is** (proved to the REED backend with a Keycloa
 
 - **One IdentityHub per company** (`<name>-ih`, plus `federated-catalog-ih` for the operator), each
   with its own database and Vault folder.
-- **DIDs**: `did:web:<name>-ih%3A7083:<name>` resolved at `http://<name>-ih:7083/<name>/did.json`;
+- **DIDs**: `did:web:<name>-ih%3A7083:<name>` resolved at `https://<name>-ih:7083/<name>/did.json` (`edc.iam.did.web.use.https=true`; the issuer writes https status-list URLs into every credential);
   the issuer is `did:web:issuerservice%3A10016:issuer`. The DID **is** the EDC participant id.
 - **Credentials** (`VC1_0_JWT`, 30 days, revocable via a status list):
 

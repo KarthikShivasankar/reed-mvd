@@ -126,7 +126,11 @@ Spring Boot 3.3 + Postgres, schema by **Flyway** (`db/migration`, Hibernate `val
 Connector prefixes: 19 nordvind, 29 castellum, 41 hanse, 42 wisla, 43 maasvlakte, 44 rhein-ndt, 45 komatsu,
 39 FC (suffixes 191 api, 192 control, 193 management, 194 DSP, 195 version, 291 public). Prefixes
 ≥ 66 overflow the port range. Container-to-container URLs use service names; browser/host URLs
-use `localhost`. Dashboard 8088, Keycloak 8180, backend 8081, LiteLLM 4000, vLLM 8000,
+use `localhost`. **Everything is https** (local CA in `deployment/tls/`, gitignored; CA key
+`deployment/tls-ca.key`): EDC Jetty from `/tls/<host>.p12`, JVMs trust only `/tls/truststore.p12`
+(via `JAVA_TOOL_OPTIONS`), JDBC `sslmode=verify-full`, Postgres `hostssl` only, `did:web` over https,
+issuer status lists `edc.statuslist.callback.address`. Scripts export `CURL_CA_BUNDLE`; Playwright
+uses `ignoreHTTPSErrors`. Ollama on the host stays http. Dashboard 8088, Keycloak 8180, backend 8081, LiteLLM 4000, vLLM 8000,
 IdentityHub admin `<prefix>081`, Issuer admin 10013/10015, Vault 8200, Postgres 5432.
 
 ### Dashboard (`services/reed-dashboard/`)

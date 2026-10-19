@@ -3,10 +3,12 @@
 # connector Management APIs on localhost.
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ROSTER="$ROOT/deployment/roster.json"
+# every https call trusts the REED local CA (deployment/tls, from the generator)
+export CURL_CA_BUNDLE="$ROOT/deployment/tls/ca.crt"
 set -a; # shellcheck disable=SC1091
 source "$ROOT/deployment/.env"; set +a
-REED_BACKEND="${REED_BACKEND:-http://localhost:8081}"
-KEYCLOAK="${KEYCLOAK:-http://localhost:8180}"
+REED_BACKEND="${REED_BACKEND:-https://localhost:8081}"
+KEYCLOAK="${KEYCLOAK:-https://localhost:8180}"
 DEMO_PASSWORD="$(jq -r .dataspace.demoPassword "$ROSTER")"
 CTX='["https://w3id.org/edc/connector/management/v2"]'   # Management API v4 (CEL rules: v5beta)
 QS='{"@context":["https://w3id.org/edc/connector/management/v2"],"@type":"QuerySpec","limit":500}'
@@ -21,8 +23,8 @@ FAILED=0
 prefix()   { jq -r --arg n "$1" '.participants[] | select(.connector.name==$n) | .connector.portPrefix' "$ROSTER"; }
 bpn_of()   { jq -r --arg n "$1" '.participants[] | select(.connector.name==$n) | .bpn' "$ROSTER"; }
 did_of()   { echo "did:web:$1-ih%3A7083:$1"; }   # each identity has its own IdentityHub
-dsp_of()   { echo "http://$1:$(prefix "$1")194/protocol/2025-1"; }
-mgmt_url() { echo "http://localhost:$(prefix "$1")193/management"; }
+dsp_of()   { echo "https://$1:$(prefix "$1")194/protocol/2025-1"; }
+mgmt_url() { echo "https://localhost:$(prefix "$1")193/management"; }
 mgmt_key() { local v="MGMT_KEY_$(echo "$1" | tr 'a-z-' 'A-Z_')"; echo "${!v}"; }
 
 # mgmt <connector> <METHOD> <path> [json]  -> body (curl -f: fails on HTTP errors)

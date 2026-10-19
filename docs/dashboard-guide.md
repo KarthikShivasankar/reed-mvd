@@ -1,6 +1,6 @@
 # Dashboard guide
 
-The dashboard (http://localhost:8088) is where people from the member companies work. Every view
+The dashboard (https://localhost:8088; trust `deployment/tls/ca.crt` first, see README) is where people from the member companies work. Every view
 has a collapsible "What this view is for" explainer; this guide follows a full matchmaking case.
 
 ## Concepts in one table

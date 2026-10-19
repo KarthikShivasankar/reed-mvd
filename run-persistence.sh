@@ -18,7 +18,7 @@ snapshot() {
   local issued=0 n px key
   while read -r n px; do
     key="IH_KEY_$(echo "$n" | tr 'a-z-' 'A-Z_')"
-    issued=$((issued + $(curl -fsS -H "x-api-key: ${!key}" "http://localhost:${px}081/api/identity/v1alpha/participants/$n/credentials" \
+    issued=$((issued + $(curl -fsS -H "x-api-key: ${!key}" "https://localhost:${px}081/api/identity/v1alpha/participants/$n/credentials" \
       | jq '[.[] | select(.state == 500)] | length')))
   done < <(jq -r '.participants[] | select((.consortium // true) and (.connector or .identity))
                   | "\(.connector.name // .identity) \(.connector.portPrefix // "39")"' "$ROSTER")

@@ -12,7 +12,7 @@ model_list:
   - model_name: reed-llm-vllm
     litellm_params:
       model: hosted_vllm/qwen3.8
-      api_base: http://vllm:8000/v1
+      api_base: https://vllm:8000/v1
       extra_body:
         chat_template_kwargs: { enable_thinking: false }
 

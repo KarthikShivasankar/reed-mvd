@@ -12,7 +12,9 @@ export default defineConfig({
   workers: 1,
   reporter: [["list"]],
   use: {
-    baseURL: process.env.REED_UI ?? "http://localhost:8088",
+    baseURL: process.env.REED_UI ?? "https://localhost:8088",
+    // the stack uses certificates from the REED local CA (deployment/tls/ca.crt), unknown to the test browser
+    ignoreHTTPSErrors: true,
     screenshot: "only-on-failure",
     trace: "retain-on-failure",
   },

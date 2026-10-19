@@ -35,6 +35,9 @@ API is published on `<p>081`. Every published port is bound to `127.0.0.1`.
 | `<p>195` | `/version` | version | tooling | no |
 | `<p>291` | `/public` | public data plane (`http-pull-proxy`) | the consumer, with an EDR token | yes |
 
+Every port serves HTTPS (Jetty keystore `/tls/<name>.p12` from the local REED CA); connectors trust
+only that CA (`/tls/truststore.p12`).
+
 ## Who talks to whom
 
 | From | To | Endpoint | Protocol | Purpose |
