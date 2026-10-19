@@ -74,7 +74,8 @@ Spring Boot 3.3 + Postgres, schema by **Flyway** (`db/migration`, Hibernate `val
   contract policies (template credential constraints) + CEL expressions; `ConnectorClient` calls
   Management APIs with per-connector keys.
 - `web/`: REST controllers incl. `ConnectorProxyController` (BFF relay: **allowlisted** Management API
-  calls only, caller-supplied `callbackAddresses` always replaced) and `EdcCallbackController`.
+  calls only; transfer/negotiation requests are **rebuilt** from allowlisted fields under a fixed
+  context - never filtered - so no caller callback or JSON-LD alias reaches the connector) and `EdcCallbackController`.
 - `usage/`: `UsageController` (`POST /reed/usage/decide`, called by the companies' data services with
   their data key: consumer must hold a contract agreement on the owner's connector, pilot licences
   expire; every decision is a PULL audit) and `Licence` (pure, unit-tested).
@@ -90,7 +91,8 @@ Spring Boot 3.3 + Postgres, schema by **Flyway** (`db/migration`, Hibernate `val
   start after a healthy issuer (status-list check at startup moves credentials to ERROR otherwise;
   `seed-identity.sh` re-issues anything not ISSUED = state 500).
 - Connector `edc.participant.id` **is its DID** `did:web:<name>-ih%3A7083:<name>`.
-- Vault: file storage, `vault-init` unseals on every `up`; each identity has folder `secret/<name>/`
+- Vault: file storage, `vault-init` unseals on every `up` (root token revoked after the first run - new
+  identities need `down -v`); each identity has folder `secret/<name>/`
   (`edc.vault.hashicorp.folder`), a policy limited to it and its own token (`VAULT_TOKEN_<NAME>`).
 - All three credential scopes are **DEFAULT** (presented on every request) - catalog requests
   carry no policy, so POLICY-scoped credentials never reach access policies.

@@ -320,13 +320,15 @@ public class MatchService {
             if (edr == null) {
                 return null;
             }
-            // The EDR names the browser-facing endpoint (localhost); inside the network the supplier's
-            // connector is reached by its service name.
-            var endpoint = java.net.URI.create(edr.endpoint());
-            var internal = "localhost".equals(endpoint.getHost())
-                    ? new java.net.URI(endpoint.getScheme(), null, supplier.connectorName, endpoint.getPort(),
-                    endpoint.getPath(), endpoint.getQuery(), null).toString()
-                    : edr.endpoint();
+            // Never fetch the URL the EDR names: build it from the registry (the supplier's own connector,
+            // its public data-plane port) and take only the /public/... path from the EDR.
+            var path = java.net.URI.create(edr.endpoint()).getRawPath();
+            var mgmt = java.net.URI.create(supplier.managementUrl);
+            var prefix = String.valueOf(mgmt.getPort()).substring(0, 2);
+            if (path == null || !path.startsWith("/public/") || path.contains("..")) {
+                return null;
+            }
+            var internal = mgmt.getScheme() + "://" + supplier.connectorName + ":" + prefix + "291" + path;
             return readJson(RestClient.create().get().uri(internal).header("Authorization", edr.authorization())
                     .retrieve().body(String.class));
         } catch (InterruptedException e) {

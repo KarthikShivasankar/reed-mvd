@@ -174,9 +174,10 @@ Deliberate remaining shortcuts, each marked `ponytail:` in code where it lives:
 
 - **No TLS.** Everything is plain http on one host (`did:web` resolution included). Production:
   certificates on every endpoint (`edc.iam.did.web.use.https=true`), Keycloak `KC_HTTPS_*`.
-- **Vault unseal key and tokens**: the unseal key is kept in a local volume, and tokens use fixed
-  ids from `.env` (Vault hashes those with SHA-1). Production: auto-unseal (KMS/HSM) and
-  AppRole/Kubernetes auth.
+- **Vault unseal key and token ids**: the root token is revoked right after bootstrap (no root token
+  exists afterwards), but the unseal key stays in a local volume - removing it needs auto-unseal
+  against an external KMS/HSM. Tokens use fixed ids from `.env` (Vault hashes those with SHA-1).
+  Production: auto-unseal and AppRole/Kubernetes auth.
 - **One host, one Vault server, one Postgres** for all companies (isolated by Vault policy and
   separate databases). Production: each company runs its own connector, IdentityHub and secrets.
 - **Delimited-string credential claims** (`,ISO9001,DNV,`) keep the issuer's database attestations

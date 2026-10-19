@@ -80,7 +80,9 @@ recover them, so every IdentityHub waits for a healthy issuer (`depends_on`).
 ## Secrets: Vault
 
 One Vault server with file storage (`reed-vault-data`), initialised and unsealed on every
-`docker compose up` by `vault-init` (`deployment/vault-init/init.sh`, generated). Every identity -
+`docker compose up` by `vault-init` (`deployment/vault-init/init.sh`, generated). The root token is
+used once to provision folders, policies and tokens and is then revoked and deleted; every later run
+loads each identity's keys with that identity's own token. Every identity -
 each company, the federated-catalog operator, the issuer - gets:
 
 - a folder `secret/<name>/` (`edc.vault.hashicorp.folder`) holding its DID keys, STS client secret,

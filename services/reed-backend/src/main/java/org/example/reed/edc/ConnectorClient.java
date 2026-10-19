@@ -61,28 +61,59 @@ public class ConnectorClient {
     }
 
     /**
-     * Replaces any caller-supplied callback addresses with the server's own: for transfers, the
-     * {@code transfer.process.started} callback that delivers the EDR to the REED backend, authenticated
-     * with the connector's low-privilege callback key from its Vault folder; for negotiations, none.
+     * Rebuilds a transfer or negotiation request from an allowlist of fields under the fixed
+     * management context - never by filtering the caller's JSON, which a custom {@code @context} could
+     * alias around. For transfers it adds the server's own {@code transfer.process.started} callback
+     * (EDR to the REED backend, authenticated with the connector's low-privilege callback key from its
+     * Vault folder); caller-supplied callbacks never reach the connector.
      */
-    public String withServerCallbacks(String connector, String body, boolean edrCallback) {
+    public String withServerCallbacks(String connector, String body, boolean transfer) {
+        ObjectNode in;
         try {
-            var json = (ObjectNode) mapper.readTree(body);
-            json.remove("callbackAddresses");
-            json.remove("https://w3id.org/edc/v0.0.1/ns/callbackAddresses");
-            if (edrCallback) {
-                var cb = json.putArray("callbackAddresses").addObject();
-                cb.put("@type", "CallbackAddress");
-                cb.put("uri", callbackBase + "/reed/edc-callbacks/" + connector);
-                cb.putArray("events").add("transfer.process.started");
-                cb.put("transactional", false);
-                // Full IRIs: the management/v2 context does not define these terms, so short names are dropped.
-                cb.put("https://w3id.org/edc/v0.0.1/ns/authKey", "X-Api-Key");
-                cb.put("https://w3id.org/edc/v0.0.1/ns/authCodeId", connector + "-callback-key");
-            }
-            return mapper.writeValueAsString(json);
+            in = (ObjectNode) mapper.readTree(body);
         } catch (Exception e) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "request body must be a JSON object");
+        }
+        var out = mapper.createObjectNode();
+        out.putArray("@context").add("https://w3id.org/edc/connector/management/v2");
+        out.put("@type", transfer ? "TransferRequest" : "ContractRequest");
+        out.put("counterPartyAddress", text(in, "counterPartyAddress"));
+        out.put("protocol", text(in, "protocol"));
+        if (transfer) {
+            out.put("contractId", text(in, "contractId"));
+            out.put("transferType", text(in, "transferType"));
+            var cb = out.putArray("callbackAddresses").addObject();
+            cb.put("@type", "CallbackAddress");
+            cb.put("uri", callbackBase + "/reed/edc-callbacks/" + connector);
+            cb.putArray("events").add("transfer.process.started");
+            cb.put("transactional", false);
+            // Full IRIs: the management/v2 context does not define these terms, so short names are dropped.
+            cb.put("https://w3id.org/edc/v0.0.1/ns/authKey", "X-Api-Key");
+            cb.put("https://w3id.org/edc/v0.0.1/ns/authCodeId", connector + "-callback-key");
+        } else {
+            if (!(in.get("policy") instanceof ObjectNode policy)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "policy (the offer) is required");
+            }
+            stripContexts(policy); // the offer is used as published; no term redefinitions inside it
+            out.set("policy", policy);
+        }
+        return out.toString();
+    }
+
+    private static String text(ObjectNode in, String field) {
+        var v = in.get(field);
+        if (v == null || !v.isTextual() || v.asText().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, field + " is required");
+        }
+        return v.asText();
+    }
+
+    private static void stripContexts(com.fasterxml.jackson.databind.JsonNode node) {
+        if (node instanceof ObjectNode o) {
+            o.remove("@context");
+            o.elements().forEachRemaining(ConnectorClient::stripContexts);
+        } else if (node.isArray()) {
+            node.elements().forEachRemaining(ConnectorClient::stripContexts);
         }
     }
 
