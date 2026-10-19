@@ -20,6 +20,7 @@ Usage:  python3 tools/gen_topology.py            # idempotent; re-run after edit
 """
 import base64
 import json
+import os
 import secrets
 import subprocess
 from pathlib import Path
@@ -146,8 +147,9 @@ for c in CONNECTORS:
 # every port from <host>.p12. Browsers and curl must trust deployment/tls/ca.crt.
 # The CA key stays outside the mounted directory (deployment/tls-ca.key, mode 600).
 # ponytail: a local CA; production uses certificates from the organisations' PKI / ACME.
-# ponytail: service keys are mode 644 under a 711 directory so non-root container users can read them;
-# on a shared host give each service its own key directory instead.
+# Host: deployment/tls/ is mode 700, so its files are reachable only by the owner even though keys are
+# 644 (non-root container users - vault, nobody - must read their own key). Each container mounts only
+# its own key (tls_mount below).
 TLS_DIR, CA_KEY = DEP / "tls", DEP / "tls-ca.key"
 TRUSTSTORE_PASSWORD = "reed-trust"  # not a secret: the truststore holds only the public CA certificate
 TLS_HOSTS = (["vault", "postgres", "keycloak", "reed-backend", "litellm", "vllm", "dashboard", "issuerservice",
@@ -156,12 +158,14 @@ TLS_HOSTS = (["vault", "postgres", "keycloak", "reed-backend", "litellm", "vllm"
 
 
 def openssl(*args: str) -> None:
-    subprocess.run(["openssl", *args], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+    subprocess.run(["openssl", *args], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+                   env={**os.environ, "TLS_KEYSTORE_PASSWORD": env["TLS_KEYSTORE_PASSWORD"]})
 
 
 def ensure_tls() -> None:
+    os.umask(0o077)  # keys are born owner-only; certificates are opened up explicitly below
     TLS_DIR.mkdir(parents=True, exist_ok=True)
-    TLS_DIR.chmod(0o711)
+    TLS_DIR.chmod(0o700)
     ca_crt = TLS_DIR / "ca.crt"
     if not ca_crt.exists():
         openssl("req", "-x509", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:P-256", "-nodes",
@@ -188,7 +192,7 @@ def ensure_tls() -> None:
         openssl("x509", "-req", "-in", str(csr), "-CA", str(ca_crt), "-CAkey", str(CA_KEY), "-CAcreateserial",
                 "-CAserial", str(DEP / "tls-ca.srl"), "-days", "825", "-sha256", "-extfile", str(ext), "-out", str(crt))
         openssl("pkcs12", "-export", "-in", str(crt), "-inkey", str(key), "-certfile", str(ca_crt), "-name", h,
-                "-out", str(p12), "-passout", f"pass:{env['TLS_KEYSTORE_PASSWORD']}")
+                "-out", str(p12), "-passout", "env:TLS_KEYSTORE_PASSWORD")
         csr.unlink()
         ext.unlink()
         for f in (key, crt, p12):
@@ -611,7 +615,13 @@ JAVA = f"""      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75 -Djavax.net.ssl.trus
 EDC_TLS = """      EDC_WEB_HTTPS_KEYSTORE_PASSWORD: ${TLS_KEYSTORE_PASSWORD}
       EDC_WEB_HTTPS_KEYMANAGER_PASSWORD: ${TLS_KEYSTORE_PASSWORD}
 """
-TLS_MOUNT = "      - ./tls:/tls:ro\n"
+
+
+def tls_mount(host: str | None) -> str:
+    # Only the CA, the JVM truststore and the service's OWN certificate/key: a compromised container
+    # cannot read another service's key. On the host deployment/tls/ is mode 700 (owner only).
+    files = ["ca.crt", "truststore.p12"] + ([f"{host}.crt", f"{host}.key", f"{host}.p12"] if host else [])
+    return "".join(f"      - ./tls/{f}:/tls/{f}:ro\n" for f in files)
 
 
 def health(url: str) -> str:
@@ -646,7 +656,7 @@ def identityhub_service(i: dict) -> str:
 {edc_env(n, f"      EDC_IH_API_SUPERUSER_KEY: ${{IH_KEY_{upper(n)}}}{chr(10)}")}    mem_limit: 1g
     volumes:
       - ./identityhub/{n}.properties:/app/config/config.properties:ro
-{TLS_MOUNT}    ports: {ports(f"{px}081:7081")}   # identity admin API (x-api-key), used by seed-identity.sh
+{tls_mount(f"{n}-ih")}    ports: {ports(f"{px}081:7081")}   # identity admin API (x-api-key), used by seed-identity.sh
     healthcheck:
       test: {health("https://127.0.0.1:7080/api/check/readiness")}
       interval: 5s
@@ -673,7 +683,7 @@ def connector_service(p: dict) -> str:
 {edc_env(name)}    mem_limit: 1g
     volumes:
       - ./{name}/config.properties:/app/config/config.properties:ro
-{TLS_MOUNT}    ports: {ports(f"{px}193:{px}193", f"{px}291:{px}291")}   # Management API (key-protected) + public data plane
+{tls_mount(name)}    ports: {ports(f"{px}193:{px}193", f"{px}291:{px}291")}   # Management API (key-protected) + public data plane
 
   # {p["short"]}'s own data service: holds its confidential payloads, releases them only to its data
   # plane, after a REED usage decision, stamped with a licence + watermark. Not published to the host.
@@ -695,7 +705,7 @@ def connector_service(p: dict) -> str:
     mem_limit: 128m
     volumes:
       - ./payloads/{name}:/data:ro
-{TLS_MOUNT}"""
+{tls_mount(f"{name}-data")}"""
 
 
 vault_env = "".join(f"      VAULT_TOKEN_{upper(n)}: ${{VAULT_TOKEN_{upper(n)}}}\n" for n in vault_identities) \
@@ -717,7 +727,7 @@ services:
     volumes:
       - ./vault-init/vault.hcl:/vault/config/vault.hcl:ro
       - reed-vault-data:/vault/file
-{TLS_MOUNT}    ports: {ports("8200:8200")}
+{tls_mount("vault")}    ports: {ports("8200:8200")}
     healthcheck:
       # healthy as soon as it answers, sealed or not (exit 2) - vault-init unseals it
       test: ["CMD-SHELL", "VAULT_ADDR=https://127.0.0.1:8200 VAULT_CACERT=/tls/ca.crt vault status > /dev/null; [ $$? -ne 1 ]"]
@@ -736,7 +746,7 @@ services:
       - ./vault-init/init.sh:/init.sh:ro
       - ./vault/keys:/keys:ro
       - reed-vault-init:/vault/init
-{TLS_MOUNT}    entrypoint: ["/bin/sh", "/init.sh"]
+{tls_mount(None)}    entrypoint: ["/bin/sh", "/init.sh"]
 
   # ---------- Postgres: REED registry, Keycloak, Issuer, every IdentityHub and connector ----------
   postgres:
@@ -754,7 +764,7 @@ services:
       - reed-pgdata:/var/lib/postgresql/data
       - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
       - ./postgres/pg_hba.conf:/etc/reed/pg_hba.conf:ro
-{TLS_MOUNT}    ports: {ports("5432:5432")}
+{tls_mount("postgres")}    ports: {ports("5432:5432")}
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U reed -d reed"]
       interval: 2s
@@ -783,7 +793,7 @@ services:
       KC_HTTP_MANAGEMENT_SCHEME: http   # health endpoint (port 9000) stays container-internal
     volumes:
       - ./keycloak/reed-realm.json:/opt/keycloak/data/import/reed-realm.json:ro
-{TLS_MOUNT}    ports: {ports("8180:8443")}
+{tls_mount("keycloak")}    ports: {ports("8180:8443")}
     healthcheck:
       test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /health/ready HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q UP <&3"]
       interval: 5s
@@ -801,7 +811,7 @@ services:
     extra_hosts: ["host.docker.internal:host-gateway"]
     volumes:
       - ./litellm/config.yaml:/app/config.yaml:ro
-{TLS_MOUNT}    ports: {ports("4000:4000")}
+{tls_mount("litellm")}    ports: {ports("4000:4000")}
 
   # Optional GPU backend (docker compose --profile vllm up): Qwen3.8 NVFP4 from the local HF cache.
   vllm:
@@ -817,7 +827,7 @@ services:
       HF_HUB_OFFLINE: "1"
     volumes:
       - ${{HOME}}/.cache/huggingface:/root/.cache/huggingface
-{TLS_MOUNT}    command: ["--model", "nvidia/Qwen3.8-27B-NVFP4", "--served-model-name", "qwen3.8",
+{tls_mount("vllm")}    command: ["--model", "nvidia/Qwen3.8-27B-NVFP4", "--served-model-name", "qwen3.8",
               "--ssl-keyfile", "/tls/vllm.key", "--ssl-certfile", "/tls/vllm.crt",
               "--max-model-len", "32768", "--gpu-memory-utilization", "0.45",
               "--enable-auto-tool-choice", "--tool-call-parser", "qwen3_coder", "--reasoning-parser", "qwen3"]
@@ -849,7 +859,7 @@ services:
 {JAVA}    volumes:
       - ./roster.json:/app/deployment/roster.json:ro
       - ./scenarios:/app/deployment/scenarios:ro
-{TLS_MOUNT}    ports: {ports("8081:8080")}
+{tls_mount("reed-backend")}    ports: {ports("8081:8080")}
     healthcheck:
       test: {health("https://127.0.0.1:8080/reed/health")}
       interval: 5s
@@ -869,7 +879,7 @@ services:
 {edc_env("issuer", "      EDC_IH_API_SUPERUSER_KEY: ${ISSUER_KEY}" + chr(10) + "      EDC_DATASOURCE_REED_PASSWORD: ${POSTGRES_PASSWORD}" + chr(10))}    mem_limit: 1g
     volumes:
       - ./issuerservice/config.properties:/app/config/config.properties:ro
-{TLS_MOUNT}    ports: {ports("10013:10013", "10015:10015")}   # issuer admin + identity APIs (x-api-key)
+{tls_mount("issuerservice")}    ports: {ports("10013:10013", "10015:10015")}   # issuer admin + identity APIs (x-api-key)
     healthcheck:
       test: {health("https://127.0.0.1:10010/api/check/readiness")}
       interval: 5s
@@ -892,7 +902,7 @@ services:
     volumes:
       - ./federated-catalog/config.properties:/app/config/config.properties:ro
       - ./federated-catalog/participants.json:/app/config/participants.json:ro
-{TLS_MOUNT}    ports: {ports(f"{FC_PREFIX}193:{FC_PREFIX}193")}
+{tls_mount("federated-catalog")}    ports: {ports(f"{FC_PREFIX}193:{FC_PREFIX}193")}
 
   # ---------- REED Dashboard (React SPA; login via Keycloak) ----------
   dashboard:
@@ -903,7 +913,7 @@ services:
     ports: {ports("8088:8080")}
     volumes:
       - ./dashboard/config.json:/usr/share/nginx/html/config.json:ro
-{TLS_MOUNT}
+{tls_mount("dashboard")}
 volumes:
   reed-pgdata:
   reed-vault-data:
