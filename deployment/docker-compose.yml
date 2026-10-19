@@ -33,6 +33,7 @@ services:
       VAULT_TOKEN_WISLA: ${VAULT_TOKEN_WISLA}
       VAULT_TOKEN_MAASVLAKTE: ${VAULT_TOKEN_MAASVLAKTE}
       VAULT_TOKEN_RHEIN_NDT: ${VAULT_TOKEN_RHEIN_NDT}
+      VAULT_TOKEN_KOMATSU: ${VAULT_TOKEN_KOMATSU}
       VAULT_TOKEN_FEDERATED_CATALOG: ${VAULT_TOKEN_FEDERATED_CATALOG}
       VAULT_TOKEN_ISSUER: ${VAULT_TOKEN_ISSUER}
       MGMT_KEY_NORDVIND: ${MGMT_KEY_NORDVIND}
@@ -41,6 +42,7 @@ services:
       MGMT_KEY_WISLA: ${MGMT_KEY_WISLA}
       MGMT_KEY_MAASVLAKTE: ${MGMT_KEY_MAASVLAKTE}
       MGMT_KEY_RHEIN_NDT: ${MGMT_KEY_RHEIN_NDT}
+      MGMT_KEY_KOMATSU: ${MGMT_KEY_KOMATSU}
       MGMT_KEY_FEDERATED_CATALOG: ${MGMT_KEY_FEDERATED_CATALOG}
     volumes:
       - ./vault-init/init.sh:/init.sh:ro
@@ -353,6 +355,35 @@ services:
       interval: 5s
       retries: 60
 
+  # IdentityHub of Komatsu Mining Germany GmbH
+  komatsu-ih:
+    image: reed/identityhub:local
+    build:
+      context: ../launchers/identity-hub
+    container_name: reed-komatsu-ih
+    depends_on:
+      vault-init:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      # its credential watchdog checks revocation status lists at the issuer on start; if the issuer
+      # is not up yet the credentials are moved to ERROR and never recover
+      issuerservice:
+        condition: service_healthy
+    environment:
+      EDC_VAULT_HASHICORP_TOKEN: ${VAULT_TOKEN_KOMATSU}
+      EDC_DATASOURCE_DEFAULT_PASSWORD: ${POSTGRES_PASSWORD}
+      EDC_IH_API_SUPERUSER_KEY: ${IH_KEY_KOMATSU}
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75
+    mem_limit: 1g
+    volumes:
+      - ./identityhub/komatsu.properties:/app/config/config.properties:ro
+    ports: ["127.0.0.1:45081:7081"]   # identity admin API (x-api-key), used by seed-identity.sh
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "http://127.0.0.1:7080/api/check/readiness"]
+      interval: 5s
+      retries: 60
+
   # IdentityHub of REED Dataspace Operator
   federated-catalog-ih:
     image: reed/identityhub:local
@@ -514,6 +545,28 @@ services:
       - ./rhein-ndt/config.properties:/app/config/config.properties:ro
     ports: ["127.0.0.1:44193:44193", "127.0.0.1:44291:44291"]   # Management API (key-protected) + public data plane
 
+  # Komatsu Mining Germany GmbH - OEM (Düsseldorf, DE)
+  komatsu:
+    image: reed/connector:local
+    build:
+      context: ../launchers/connector
+    container_name: reed-komatsu
+    depends_on:
+      vault-init:
+        condition: service_completed_successfully
+      reed-backend:
+        condition: service_healthy
+      komatsu-ih:
+        condition: service_healthy
+    environment:
+      EDC_VAULT_HASHICORP_TOKEN: ${VAULT_TOKEN_KOMATSU}
+      EDC_DATASOURCE_DEFAULT_PASSWORD: ${POSTGRES_PASSWORD}
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75
+    mem_limit: 1g
+    volumes:
+      - ./komatsu/config.properties:/app/config/config.properties:ro
+    ports: ["127.0.0.1:45193:45193", "127.0.0.1:45291:45291"]   # Management API (key-protected) + public data plane
+
   # ---------- Federated Catalog (crawls every connector) ----------
   federated-catalog:
     image: reed/federated-catalog:local
@@ -536,6 +589,8 @@ services:
       maasvlakte:
         condition: service_started
       rhein-ndt:
+        condition: service_started
+      komatsu:
         condition: service_started
     environment:
       EDC_VAULT_HASHICORP_TOKEN: ${VAULT_TOKEN_FEDERATED_CATALOG}

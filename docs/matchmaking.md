@@ -114,6 +114,13 @@ Guardrails:
 - `run-matchmaking.sh` - the same scenarios over HTTP and EDC; `SCENARIO=R1` runs one.
 - `services/reed-dashboard/e2e/reed.spec.ts` - the lifecycle in a real browser.
 
+## Illustrative scenarios with a real company
+
+K1 (cast swing-circle carrier) and K2 (welded boom) are placed at **Komatsu Mining Germany GmbH**
+(Düsseldorf, a maker of large hydraulic mining shovels), at the user's request. They are invented
+demo scenarios, not actual Komatsu purchases; the participant carries `"illustrative": true`, no
+certifications, capabilities, VAT id or relations, and the dashboard labels it as illustrative.
+
 ## Adding a scenario
 
 Add an entry to `deployment/scenarios/matchmaking.json` with `expectedTop` (and optionally

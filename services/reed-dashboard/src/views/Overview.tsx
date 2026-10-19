@@ -76,8 +76,9 @@ export function Overview({ ctx }: { ctx: Ctx }) {
 
       <h2 className="block-title">Real-case scenarios</h2>
       <p className="muted block-lede">
-        Nine requests for large parts from two European OEMs. Each shows which suppliers qualify, why the others are
-        filtered out, and - where both sides run a connector - the full contract and confirmation.
+        {scen.data ? `${scen.data.rfqs.length} requests` : "Requests"} for large parts from European OEMs. Each shows which
+        suppliers qualify, why the others are filtered out, and - where both sides run a connector - the full contract
+        and confirmation. Komatsu's (K1, K2) are illustrative: a real company in invented scenarios.
       </p>
       <div className="chains">
         {[...byChain.entries()].map(([chain, list]) => (

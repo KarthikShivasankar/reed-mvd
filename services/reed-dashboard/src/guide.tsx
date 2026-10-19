@@ -20,7 +20,7 @@ export const TAB_HELP: Record<string, TabHelp> = {
     contains: [
       "Your organisation, role and the certifications the REED issuer has verified for it.",
       "What needs your attention: open RFQs, matches to answer, opportunities.",
-      "The nine real-case scenarios across wind, offshore, rail / heavy machinery and hydropower.",
+      "The real-case scenarios across wind, offshore, rail / heavy machinery (including illustrative Komatsu mining-shovel parts) and hydropower.",
       "The topology diagram: six connectors, the identity services, the federated catalog and the REED backend.",
     ],
     usage: "Start here. Open a scenario to see its ranked suppliers, or press ▶ on the diagram to walk the six stages of an exchange.",
@@ -168,7 +168,7 @@ export function NetworkReference() {
       <div className="netref-body">
         <div className="netref-grid">
           <div>
-            <h4>Port convention <span className="faint">(19 Nordvind · 29 Castellum · 41 Hanse · 42 Wisła · 43 Maasvlakte · 44 Rhein NDT · 39 FC)</span></h4>
+            <h4>Port convention <span className="faint">(19 Nordvind · 29 Castellum · 41 Hanse · 42 Wisła · 43 Maasvlakte · 44 Rhein NDT · 45 Komatsu · 39 FC)</span></h4>
             <table className="grid mini">
               <thead><tr><th>Port</th><th>Path</th><th>Context</th><th>Called by</th><th>Protocol</th></tr></thead>
               <tbody>

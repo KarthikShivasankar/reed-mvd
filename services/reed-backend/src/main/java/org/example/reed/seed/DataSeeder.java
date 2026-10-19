@@ -165,6 +165,7 @@ public class DataSeeder implements CommandLineRunner {
             p.shortName = spec.shortName();
             p.role = spec.role();
             p.consortium = spec.member();
+            p.illustrative = Boolean.TRUE.equals(spec.illustrative());
             p.country = spec.country();
             p.city = spec.city();
             p.vatId = spec.vatId();

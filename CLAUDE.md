@@ -18,7 +18,9 @@ EDC policies are CEL rules over those credentials.
 Org/user constraints: the LLM must be **local** (LiteLLM → Ollama/vLLM, Qwen3.8) - never an
 external AI API; send it **no personal data** (organisation/part data only; redaction in
 `PersonalDataRedactor`). Companies in the roster are **fictional EU companies** - never attach
-fabricated claims to real firms.
+fabricated claims to real firms. Exception, on the user's request: **Komatsu Mining Germany GmbH**
+(`"illustrative": true`) as a buyer in invented scenarios K1/K2 - no attestations, capabilities,
+VAT id or relations for it; keep it labelled illustrative everywhere.
 
 ## Build, run, test
 
@@ -30,7 +32,7 @@ docker compose -f deployment/docker-compose.yml up --build -d    # --profile vll
 ./seed-identity.sh                 # DIDs + credentials (all ISSUED)
 ./seed-reed.sh                     # per-owner EDC assets, policies, contract defs, CEL rules
 ./run-transfer.sh                  # DCP e2e: 1 contract + pull, 2 credential refusals (exit 0 = all PASS)
-./run-matchmaking.sh               # 9 scenarios (SCENARIO=R1 for one)
+./run-matchmaking.sh               # 11 scenarios (SCENARIO=K1 for one)
 ./run-persistence.sh               # down + up with volumes kept: nothing may need re-seeding
 ./gradlew :services:reed-backend:test                          # scorer, fixtures, assistant guardrails
 cd services/reed-dashboard && npx playwright test              # UI e2e (stack must be up + seeded)
@@ -107,7 +109,7 @@ Spring Boot 3.3 + Postgres, schema by **Flyway** (`db/migration`, Hibernate `val
 - All EDC `*/request` list endpoints need a `QuerySpec` body.
 
 ### Ports and URL rule
-Connector prefixes: 19 nordvind, 29 castellum, 41 hanse, 42 wisla, 43 maasvlakte, 44 rhein-ndt,
+Connector prefixes: 19 nordvind, 29 castellum, 41 hanse, 42 wisla, 43 maasvlakte, 44 rhein-ndt, 45 komatsu,
 39 FC (suffixes 191 api, 192 control, 193 management, 194 DSP, 195 version, 291 public). Prefixes
 ≥ 66 overflow the port range. Container-to-container URLs use service names; browser/host URLs
 use `localhost`. Dashboard 8088, Keycloak 8180, backend 8081, LiteLLM 4000, vLLM 8000,

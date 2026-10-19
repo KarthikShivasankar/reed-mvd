@@ -60,6 +60,15 @@
       "participantId": "did:web:rhein-ndt-ih%3A7083:rhein-ndt",
       "dspUrl": "http://rhein-ndt:44194/protocol/2025-1",
       "publicUrl": "http://localhost:44291/public/"
+    },
+    {
+      "name": "komatsu",
+      "bpn": "BPN-REED-OEM-0003",
+      "company": "Komatsu Mining Germany GmbH",
+      "short": "Komatsu",
+      "participantId": "did:web:komatsu-ih%3A7083:komatsu",
+      "dspUrl": "http://komatsu:45194/protocol/2025-1",
+      "publicUrl": "http://localhost:45291/public/"
     }
   ]
 }

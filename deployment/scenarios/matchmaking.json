@@ -2,121 +2,434 @@
   "_comment": "Real-case matchmaking scenarios across four European heavy-industry supply chains. Used by the backend seeder (open RFQs), MatchScorer/ScenarioFixtureTest, run-matchmaking.sh and the dashboard. expectedTop / expectedRejections are asserted by tests and the e2e script.",
   "rfqs": [
     {
-      "id": "R1", "chain": "wind", "buyer": "BPN-REED-OEM-0001",
+      "id": "R1",
+      "chain": "wind",
+      "buyer": "BPN-REED-OEM-0001",
       "title": "Rotor hub casting, 6 MW offshore turbine",
       "story": "Nordvind needs 12 ductile-iron rotor hubs for an offshore wind farm in the North Sea. Hubs are 38 t castings that must carry DNV class approval. The hub also needs ultrasonic testing and abnormal-load transport, so REED recommends partners for those steps too.",
-      "sector": "wind", "partFamily": "hub", "material": "EN-GJS-400-18-LT",
-      "dimsMm": [4200, 4000, 3600], "massKg": 38000, "tolMm": 2.0, "quantity": 12, "dueInWeeks": 40,
-      "requiredProcesses": ["sand-casting", "heat-treatment"],
-      "requiredCerts": ["DNV"],
-      "partnerProcesses": ["ndt-ut", "heavy-lift"],
+      "sector": "wind",
+      "partFamily": "hub",
+      "material": "EN-GJS-400-18-LT",
+      "dimsMm": [
+        4200,
+        4000,
+        3600
+      ],
+      "massKg": 38000,
+      "tolMm": 2.0,
+      "quantity": 12,
+      "dueInWeeks": 40,
+      "requiredProcesses": [
+        "sand-casting",
+        "heat-treatment"
+      ],
+      "requiredCerts": [
+        "DNV"
+      ],
+      "partnerProcesses": [
+        "ndt-ut",
+        "heavy-lift"
+      ],
       "expectedTop": "BPN-REED-SUP-0002",
-      "expectedRejections": { "BPN-REED-SUP-0008": ["MASS_EXCEEDED", "CERT_NOT_VERIFIED"] },
-      "expectedPartners": { "ndt-ut": "BPN-REED-SUP-0005", "heavy-lift": "BPN-REED-SUP-0004" }
+      "expectedRejections": {
+        "BPN-REED-SUP-0008": [
+          "MASS_EXCEEDED",
+          "CERT_NOT_VERIFIED"
+        ]
+      },
+      "expectedPartners": {
+        "ndt-ut": "BPN-REED-SUP-0005",
+        "heavy-lift": "BPN-REED-SUP-0004"
+      }
     },
     {
-      "id": "R2", "chain": "wind", "buyer": "BPN-REED-OEM-0001",
+      "id": "R2",
+      "chain": "wind",
+      "buyer": "BPN-REED-OEM-0001",
       "title": "Tower flange / yaw bearing ring Ø6.5 m",
       "story": "A forged 42CrMo4 ring must be finish-turned to 0.1 mm flatness. Only vertical turning lathes above 6.5 m swing qualify.",
-      "sector": "wind", "partFamily": "ring", "material": "42CrMo4",
-      "dimsMm": [6500, 6500, 300], "massKg": 9000, "tolMm": 0.1, "quantity": 24, "dueInWeeks": 26,
-      "requiredProcesses": ["machining-turning"],
-      "requiredCerts": ["ISO9001"],
+      "sector": "wind",
+      "partFamily": "ring",
+      "material": "42CrMo4",
+      "dimsMm": [
+        6500,
+        6500,
+        300
+      ],
+      "massKg": 9000,
+      "tolMm": 0.1,
+      "quantity": 24,
+      "dueInWeeks": 26,
+      "requiredProcesses": [
+        "machining-turning"
+      ],
+      "requiredCerts": [
+        "ISO9001"
+      ],
       "partnerProcesses": [],
       "expectedTop": "BPN-REED-SUP-0003",
-      "expectedRejections": { "BPN-REED-SUP-0009": ["ENVELOPE_TOO_SMALL"], "BPN-REED-SUP-0010": ["ENVELOPE_TOO_SMALL"] }
+      "expectedRejections": {
+        "BPN-REED-SUP-0009": [
+          "ENVELOPE_TOO_SMALL"
+        ],
+        "BPN-REED-SUP-0010": [
+          "ENVELOPE_TOO_SMALL"
+        ]
+      }
     },
     {
-      "id": "R3", "chain": "offshore", "buyer": "BPN-REED-OEM-0002",
+      "id": "R3",
+      "chain": "offshore",
+      "buyer": "BPN-REED-OEM-0002",
       "title": "Hull block for offshore service vessel",
       "story": "Hanse outsources a 280 t DH36 hull block. Only a yard with block-fabrication halls, DNV approval and ISO 3834-2 welding qualifies.",
-      "sector": "offshore", "partFamily": "hull-block", "material": "DH36",
-      "dimsMm": [18000, 14000, 8000], "massKg": 280000, "tolMm": 3.0, "quantity": 1, "dueInWeeks": 30,
-      "requiredProcesses": ["welding", "hull-block-fabrication"],
-      "requiredCerts": ["DNV", "ISO3834-2"],
-      "partnerProcesses": ["load-out"],
+      "sector": "offshore",
+      "partFamily": "hull-block",
+      "material": "DH36",
+      "dimsMm": [
+        18000,
+        14000,
+        8000
+      ],
+      "massKg": 280000,
+      "tolMm": 3.0,
+      "quantity": 1,
+      "dueInWeeks": 30,
+      "requiredProcesses": [
+        "welding",
+        "hull-block-fabrication"
+      ],
+      "requiredCerts": [
+        "DNV",
+        "ISO3834-2"
+      ],
+      "partnerProcesses": [
+        "load-out"
+      ],
       "expectedTop": "BPN-REED-SUP-0007",
-      "expectedRejections": { "BPN-REED-SUP-0006": ["PROCESS_MISSING", "ENVELOPE_TOO_SMALL", "MASS_EXCEEDED"], "BPN-REED-SUP-0012": ["PROCESS_MISSING"] }
+      "expectedRejections": {
+        "BPN-REED-SUP-0006": [
+          "PROCESS_MISSING",
+          "ENVELOPE_TOO_SMALL",
+          "MASS_EXCEEDED"
+        ],
+        "BPN-REED-SUP-0012": [
+          "PROCESS_MISSING"
+        ]
+      }
     },
     {
-      "id": "R4", "chain": "offshore", "buyer": "BPN-REED-OEM-0002",
+      "id": "R4",
+      "chain": "offshore",
+      "buyer": "BPN-REED-OEM-0002",
       "title": "Jacket cast node, G20Mn5",
       "story": "Cast steel nodes join the tubular members of an offshore jacket foundation. G20Mn5 with DNV approval is mandatory.",
-      "sector": "offshore", "partFamily": "node", "material": "G20Mn5",
-      "dimsMm": [3200, 2800, 2400], "massKg": 22000, "tolMm": 2.0, "quantity": 8, "dueInWeeks": 32,
-      "requiredProcesses": ["sand-casting", "heat-treatment"],
-      "requiredCerts": ["DNV"],
-      "partnerProcesses": ["ndt-ut", "ndt-mt"],
+      "sector": "offshore",
+      "partFamily": "node",
+      "material": "G20Mn5",
+      "dimsMm": [
+        3200,
+        2800,
+        2400
+      ],
+      "massKg": 22000,
+      "tolMm": 2.0,
+      "quantity": 8,
+      "dueInWeeks": 32,
+      "requiredProcesses": [
+        "sand-casting",
+        "heat-treatment"
+      ],
+      "requiredCerts": [
+        "DNV"
+      ],
+      "partnerProcesses": [
+        "ndt-ut",
+        "ndt-mt"
+      ],
       "expectedTop": "BPN-REED-SUP-0002",
-      "expectedRejections": { "BPN-REED-SUP-0008": ["MATERIAL_UNSUPPORTED"] }
+      "expectedRejections": {
+        "BPN-REED-SUP-0008": [
+          "MATERIAL_UNSUPPORTED"
+        ]
+      }
     },
     {
-      "id": "R5", "chain": "offshore", "buyer": "BPN-REED-OEM-0002",
+      "id": "R5",
+      "chain": "offshore",
+      "buyer": "BPN-REED-OEM-0002",
       "title": "Propeller shaft forging, 34CrNiMo6",
       "story": "A 14 m propeller shaft for a DP2 vessel: open-die forged, quenched and tempered, finish-turned, DNV-certified material.",
-      "sector": "offshore", "partFamily": "shaft", "material": "34CrNiMo6",
-      "dimsMm": [14000, 900, 900], "massKg": 32000, "tolMm": 0.05, "quantity": 2, "dueInWeeks": 36,
-      "requiredProcesses": ["open-die-forging", "heat-treatment", "machining-turning"],
-      "requiredCerts": ["DNV"],
-      "partnerProcesses": ["ndt-ut"],
+      "sector": "offshore",
+      "partFamily": "shaft",
+      "material": "34CrNiMo6",
+      "dimsMm": [
+        14000,
+        900,
+        900
+      ],
+      "massKg": 32000,
+      "tolMm": 0.05,
+      "quantity": 2,
+      "dueInWeeks": 36,
+      "requiredProcesses": [
+        "open-die-forging",
+        "heat-treatment",
+        "machining-turning"
+      ],
+      "requiredCerts": [
+        "DNV"
+      ],
+      "partnerProcesses": [
+        "ndt-ut"
+      ],
       "expectedTop": "BPN-REED-SUP-0010",
-      "expectedRejections": { "BPN-REED-SUP-0003": ["PROCESS_MISSING"] }
+      "expectedRejections": {
+        "BPN-REED-SUP-0003": [
+          "PROCESS_MISSING"
+        ]
+      }
     },
     {
-      "id": "R6", "chain": "rail", "buyer": "BPN-REED-OEM-0002",
+      "id": "R6",
+      "chain": "rail",
+      "buyer": "BPN-REED-OEM-0002",
       "title": "Welded bogie frame, series of 300",
       "story": "Railway welding to EN 15085-2 is a legal prerequisite for bogie frames. Two certified fabricators qualify; proximity and lead time decide.",
-      "sector": "rail", "partFamily": "bogie-frame", "material": "S355J2",
-      "dimsMm": [3200, 2600, 900], "massKg": 1800, "tolMm": 0.5, "quantity": 300, "dueInWeeks": 24,
-      "requiredProcesses": ["welding", "machining-milling"],
-      "requiredCerts": ["EN15085-2", "ISO3834-2"],
+      "sector": "rail",
+      "partFamily": "bogie-frame",
+      "material": "S355J2",
+      "dimsMm": [
+        3200,
+        2600,
+        900
+      ],
+      "massKg": 1800,
+      "tolMm": 0.5,
+      "quantity": 300,
+      "dueInWeeks": 24,
+      "requiredProcesses": [
+        "welding",
+        "machining-milling"
+      ],
+      "requiredCerts": [
+        "EN15085-2",
+        "ISO3834-2"
+      ],
       "partnerProcesses": [],
       "expectedTop": "BPN-REED-SUP-0009",
       "expectedSecond": "BPN-REED-SUP-0006",
-      "expectedRejections": { "BPN-REED-SUP-0007": ["PROCESS_MISSING", "CERT_NOT_VERIFIED"] }
+      "expectedRejections": {
+        "BPN-REED-SUP-0007": [
+          "PROCESS_MISSING",
+          "CERT_NOT_VERIFIED"
+        ]
+      }
     },
     {
-      "id": "R7", "chain": "heavy-machinery", "buyer": "BPN-REED-OEM-0002",
+      "id": "R7",
+      "chain": "heavy-machinery",
+      "buyer": "BPN-REED-OEM-0002",
       "title": "Hydraulic press frame, 95 t",
       "story": "A welded and stress-relieved S460NL frame for a 4,000 t forging press; EN 1090 EXC3 execution class required.",
-      "sector": "heavy-machinery", "partFamily": "press-frame", "material": "S460NL",
-      "dimsMm": [9000, 4500, 3500], "massKg": 95000, "tolMm": 0.1, "quantity": 1, "dueInWeeks": 30,
-      "requiredProcesses": ["welding", "machining-milling", "heat-treatment"],
-      "requiredCerts": ["EN1090-EXC3"],
-      "partnerProcesses": ["heavy-lift"],
+      "sector": "heavy-machinery",
+      "partFamily": "press-frame",
+      "material": "S460NL",
+      "dimsMm": [
+        9000,
+        4500,
+        3500
+      ],
+      "massKg": 95000,
+      "tolMm": 0.1,
+      "quantity": 1,
+      "dueInWeeks": 30,
+      "requiredProcesses": [
+        "welding",
+        "machining-milling",
+        "heat-treatment"
+      ],
+      "requiredCerts": [
+        "EN1090-EXC3"
+      ],
+      "partnerProcesses": [
+        "heavy-lift"
+      ],
       "expectedTop": "BPN-REED-SUP-0006",
-      "expectedRejections": { "BPN-REED-SUP-0009": ["PROCESS_MISSING", "MASS_EXCEEDED"] }
+      "expectedRejections": {
+        "BPN-REED-SUP-0009": [
+          "PROCESS_MISSING",
+          "MASS_EXCEEDED"
+        ]
+      }
     },
     {
-      "id": "R8", "chain": "hydro", "buyer": "BPN-REED-OEM-0001",
+      "id": "R8",
+      "chain": "hydro",
+      "buyer": "BPN-REED-OEM-0001",
       "title": "Francis turbine runner, GX4CrNi13-4",
       "story": "A 28 t martensitic-stainless runner for a Norwegian hydropower refurbishment. The casting needs a machining partner and NDT afterwards.",
-      "sector": "hydro", "partFamily": "runner", "material": "GX4CrNi13-4",
-      "dimsMm": [4200, 4200, 1800], "massKg": 28000, "tolMm": 1.0, "quantity": 1, "dueInWeeks": 44,
-      "requiredProcesses": ["sand-casting", "heat-treatment"],
-      "requiredCerts": ["ISO9001"],
-      "partnerProcesses": ["machining-turning", "ndt-ut"],
+      "sector": "hydro",
+      "partFamily": "runner",
+      "material": "GX4CrNi13-4",
+      "dimsMm": [
+        4200,
+        4200,
+        1800
+      ],
+      "massKg": 28000,
+      "tolMm": 1.0,
+      "quantity": 1,
+      "dueInWeeks": 44,
+      "requiredProcesses": [
+        "sand-casting",
+        "heat-treatment"
+      ],
+      "requiredCerts": [
+        "ISO9001"
+      ],
+      "partnerProcesses": [
+        "machining-turning",
+        "ndt-ut"
+      ],
       "expectedTop": "BPN-REED-SUP-0002",
-      "expectedRejections": { "BPN-REED-SUP-0008": ["MATERIAL_UNSUPPORTED"] },
-      "expectedPartners": { "ndt-ut": "BPN-REED-SUP-0005" }
+      "expectedRejections": {
+        "BPN-REED-SUP-0008": [
+          "MATERIAL_UNSUPPORTED"
+        ]
+      },
+      "expectedPartners": {
+        "ndt-ut": "BPN-REED-SUP-0005"
+      }
     },
     {
-      "id": "R9", "chain": "hydro", "buyer": "BPN-REED-OEM-0001",
+      "id": "R9",
+      "chain": "hydro",
+      "buyer": "BPN-REED-OEM-0001",
       "title": "Penstock section to a fjord power plant",
       "story": "Rolled and welded S500ML penstock sections, delivered by sea to a hydropower site in Sauda (NO). Bulky parts favour suppliers with quay access close to the site.",
-      "sector": "hydro", "partFamily": "penstock", "material": "S500ML",
-      "dimsMm": [6000, 5000, 5000], "massKg": 42000, "tolMm": 3.0, "quantity": 6, "dueInWeeks": 34,
-      "deliveryLat": 59.65, "deliveryLon": 6.35,
-      "requiredProcesses": ["plate-rolling", "welding"],
-      "requiredCerts": ["ISO3834-2"],
-      "partnerProcesses": ["heavy-lift"],
+      "sector": "hydro",
+      "partFamily": "penstock",
+      "material": "S500ML",
+      "dimsMm": [
+        6000,
+        5000,
+        5000
+      ],
+      "massKg": 42000,
+      "tolMm": 3.0,
+      "quantity": 6,
+      "dueInWeeks": 34,
+      "deliveryLat": 59.65,
+      "deliveryLon": 6.35,
+      "requiredProcesses": [
+        "plate-rolling",
+        "welding"
+      ],
+      "requiredCerts": [
+        "ISO3834-2"
+      ],
+      "partnerProcesses": [
+        "heavy-lift"
+      ],
       "expectedTop": "BPN-REED-SUP-0007",
       "expectedSecond": "BPN-REED-SUP-0012",
-      "expectedRejections": { "BPN-REED-SUP-0006": ["PROCESS_MISSING"] }
+      "expectedRejections": {
+        "BPN-REED-SUP-0006": [
+          "PROCESS_MISSING"
+        ]
+      }
+    },
+    {
+      "id": "K1",
+      "chain": "heavy-machinery",
+      "buyer": "BPN-REED-OEM-0003",
+      "title": "Cast swing-circle carrier for a hydraulic mining shovel",
+      "story": "Illustrative scenario (not an actual Komatsu purchase): the Düsseldorf plant of Komatsu, which builds large hydraulic mining shovels, sources six 18 t cast-steel carriers for the swing circle. Cast G20Mn5 with heat treatment; ultrasonic testing by a partner.",
+      "sector": "heavy-machinery",
+      "partFamily": "swing-carrier",
+      "material": "G20Mn5",
+      "dimsMm": [
+        3800,
+        3800,
+        1400
+      ],
+      "massKg": 18000,
+      "tolMm": 2.0,
+      "quantity": 6,
+      "dueInWeeks": 30,
+      "requiredProcesses": [
+        "sand-casting",
+        "heat-treatment"
+      ],
+      "requiredCerts": [
+        "ISO9001"
+      ],
+      "partnerProcesses": [
+        "ndt-ut"
+      ],
+      "expectedTop": "BPN-REED-SUP-0002",
+      "expectedRejections": {
+        "BPN-REED-SUP-0008": [
+          "MATERIAL_UNSUPPORTED"
+        ]
+      },
+      "expectedPartners": {
+        "ndt-ut": "BPN-REED-SUP-0005"
+      }
+    },
+    {
+      "id": "K2",
+      "chain": "heavy-machinery",
+      "buyer": "BPN-REED-OEM-0003",
+      "title": "Welded boom for a large hydraulic mining shovel",
+      "story": "Illustrative scenario (not an actual Komatsu purchase): a 38 t welded S460NL boom, stress-relieved and machined at the pin bores, EN 1090 EXC3 and ISO 3834-2 welding. The boom ships as an abnormal load, so REED also recommends a heavy-lift partner.",
+      "sector": "heavy-machinery",
+      "partFamily": "boom",
+      "material": "S460NL",
+      "dimsMm": [
+        9500,
+        2600,
+        2400
+      ],
+      "massKg": 38000,
+      "tolMm": 0.5,
+      "quantity": 2,
+      "dueInWeeks": 32,
+      "requiredProcesses": [
+        "welding",
+        "machining-milling",
+        "heat-treatment"
+      ],
+      "requiredCerts": [
+        "EN1090-EXC3",
+        "ISO3834-2"
+      ],
+      "partnerProcesses": [
+        "heavy-lift"
+      ],
+      "expectedTop": "BPN-REED-SUP-0006",
+      "expectedRejections": {
+        "BPN-REED-SUP-0009": [
+          "PROCESS_MISSING",
+          "CERT_NOT_VERIFIED"
+        ],
+        "BPN-REED-SUP-0012": [
+          "PROCESS_MISSING"
+        ]
+      },
+      "expectedPartners": {
+        "heavy-lift": "BPN-REED-SUP-0004"
+      }
     }
   ],
   "negative": [
-    { "id": "N1", "title": "Non-member posts an RFQ", "actor": "vagant-buyer", "expect": 403,
-      "story": "Vagant Components is not a REED consortium member: it has no MembershipCredential, cannot post RFQs, sees an empty catalogue and its EDC negotiations are refused." }
+    {
+      "id": "N1",
+      "title": "Non-member posts an RFQ",
+      "actor": "vagant-buyer",
+      "expect": 403,
+      "story": "Vagant Components is not a REED consortium member: it has no MembershipCredential, cannot post RFQs, sees an empty catalogue and its EDC negotiations are refused."
+    }
   ]
 }

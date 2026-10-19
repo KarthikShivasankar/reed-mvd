@@ -79,3 +79,10 @@ test("ids from links cannot steer requests to other endpoints", async ({ page })
   await expect(page.getByText("to see its ranked suppliers")).toBeVisible(); // falls back to the RFQ picker
   expect(calls.filter((u) => u.includes("/connectors/"))).toHaveLength(0);
 });
+
+test("Komatsu is labelled as an illustrative, real company", async ({ page }) => {
+  await login(page, "komatsu-buyer", "participants");
+  const card = page.locator("article.member", { hasText: "Komatsu Mining Germany GmbH" });
+  await expect(card).toContainText("Real company, illustrative only");
+  await expect(card.locator(".cert")).toHaveCount(0); // no certifications claimed
+});

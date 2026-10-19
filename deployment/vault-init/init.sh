@@ -34,6 +34,7 @@ identity castellum "$VAULT_TOKEN_CASTELLUM"
 identity wisla "$VAULT_TOKEN_WISLA"
 identity maasvlakte "$VAULT_TOKEN_MAASVLAKTE"
 identity rhein-ndt "$VAULT_TOKEN_RHEIN_NDT"
+identity komatsu "$VAULT_TOKEN_KOMATSU"
 identity federated-catalog "$VAULT_TOKEN_FEDERATED_CATALOG"
 identity issuer "$VAULT_TOKEN_ISSUER"
 vault kv put secret/nordvind/nordvind-signing-key content=@/keys/nordvind-signing-key.pem > /dev/null
@@ -54,5 +55,8 @@ vault kv put secret/maasvlakte/maasvlakte-mgmt-api-key content="$MGMT_KEY_MAASVL
 vault kv put secret/rhein-ndt/rhein-ndt-signing-key content=@/keys/rhein-ndt-signing-key.pem > /dev/null
 vault kv put secret/rhein-ndt/rhein-ndt-verification-key content=@/keys/rhein-ndt-verification-key.pem > /dev/null
 vault kv put secret/rhein-ndt/rhein-ndt-mgmt-api-key content="$MGMT_KEY_RHEIN_NDT" > /dev/null
+vault kv put secret/komatsu/komatsu-signing-key content=@/keys/komatsu-signing-key.pem > /dev/null
+vault kv put secret/komatsu/komatsu-verification-key content=@/keys/komatsu-verification-key.pem > /dev/null
+vault kv put secret/komatsu/komatsu-mgmt-api-key content="$MGMT_KEY_KOMATSU" > /dev/null
 vault kv put secret/federated-catalog/federated-catalog-mgmt-api-key content="$MGMT_KEY_FEDERATED_CATALOG" > /dev/null
-echo "Vault ready: 8 identities, each confined to secret/<name>/."
+echo "Vault ready: 9 identities, each confined to secret/<name>/."

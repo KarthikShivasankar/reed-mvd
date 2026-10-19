@@ -16,7 +16,7 @@ only after a contract** - and every connector proves who it is with **verifiable
 | **Identity for people** | Keycloak (OIDC, PKCE): roles `buyer`, `supplier-engineer`, `quality-auditor`, `admin`; the token carries the user's organisation |
 | **Matchmaking** | Hard filters + six weighted criteria (lead time, tolerance margin, logistics for bulky parts, track record, sector, embedded CO2 for CBAM) with per-criterion explanations, partner recommendations and a contract-backed match lifecycle |
 | **Assistant** | Local LLM only: **Qwen3.8** via **LiteLLM**, routed to **Ollama** (default) or **vLLM**; personal data is redacted, scores come from the scorer |
-| **Real cases** | 9 RFQs across wind, shipbuilding/offshore, rail/heavy machinery and hydropower, 15 fictional European companies in real EU industrial clusters |
+| **Real cases** | 11 RFQs across wind, shipbuilding/offshore, rail/heavy machinery (incl. mining shovels) and hydropower; 15 fictional European companies in real EU industrial clusters plus Komatsu Mining Germany as an illustrative buyer |
 
 > State survives restarts: Vault (file storage, auto-unsealed), every connector, IdentityHub,
 > the issuer, Keycloak and the REED registry persist in Postgres - `run-persistence.sh` proves it.
@@ -85,7 +85,7 @@ docker compose -f deployment/docker-compose.yml up --build -d
 
 # 5. Verify end to end
 ./run-transfer.sh        # DCP contract + EDR pull, and two credential-based refusals
-./run-matchmaking.sh     # all 9 real-case scenarios, full lifecycle where both sides run a connector
+./run-matchmaking.sh     # all 11 scenarios, full lifecycle where both sides run a connector
 ./run-persistence.sh     # full stop/start without wiping volumes: nothing needs re-seeding
 (cd services/reed-dashboard && npm ci && npx playwright install chromium && npx playwright test)
 ```
@@ -96,6 +96,7 @@ Open **http://localhost:8088** and log in (password for every demo user: `reed-d
 |---|---|---|
 | `nordvind-buyer` | Nordvind Energy Systems (OEM, Stavanger NO) | Matches → R1 rotor hub: shortlist Castellum, later *Request capability via contract* |
 | `hanse-buyer` | Hanse Marine & Rail (OEM, Kiel DE) | R4 jacket node, R6 bogie frame |
+| `komatsu-buyer` | Komatsu Mining Germany (illustrative, Düsseldorf DE) | K1 swing-circle carrier: full contract with Castellum |
 | `castellum-engineer` | Castellum Fundición (foundry, Bilbao ES) | Opportunities: accept the shortlist |
 | `wisla-engineer` | Wisła Precision Machining (Gdańsk PL) | Opportunities: R2 bearing ring |
 | `rhein-auditor`, `maasvlakte-engineer` | service providers | partner recommendations, audit |
@@ -123,15 +124,19 @@ asserted by `ScenarioFixtureTest` and `run-matchmaking.sh`.
 | R7 | Heavy machinery | Hydraulic press frame, 95 t, EN 1090 EXC3 | Ebro (Zaragoza) | Sachsen: no heat treatment, too heavy |
 | R8 | Hydro | Francis runner, GX4CrNi13-4 | Castellum (+ Rhein NDT, Wisła as partners) | Śląsk: material |
 | R9 | Hydro | Penstock to a fjord site | Odense, then Atlantique (Saint-Nazaire) | Ebro: no plate rolling |
+| K1 | Mining machinery | Cast swing-circle carrier, G20Mn5, 18 t *(Komatsu, illustrative)* | Castellum (+ Rhein NDT for UT) | Śląsk: material |
+| K2 | Mining machinery | Welded boom, S460NL, 38 t, EN 1090 EXC3 *(Komatsu, illustrative)* | Ebro (+ Maasvlakte for heavy lift) | Sachsen: no heat treatment, no EN 1090 EXC3; Atlantique: no milling/heat treatment |
 
 All companies are **fictional** European companies placed in real industrial clusters; VAT ids are
-illustrative. Nothing here describes a real firm.
+illustrative. The one exception is **Komatsu Mining Germany GmbH** (Düsseldorf), added on request as an
+**illustrative buyer**: K1 and K2 are invented scenarios, not actual Komatsu purchases, and no
+certifications, capabilities, registrations or relations are claimed for it (the dashboard labels it).
 
 ## Repository layout
 
 ```
 deployment/roster.json              single source of truth: participants, capabilities, credentials, users
-deployment/scenarios/matchmaking.json   the 9 real-case RFQs + expected outcomes
+deployment/scenarios/matchmaking.json   the 11 RFQs + expected outcomes
 tools/gen_topology.py               roster -> compose file, connector/identity configs, realm, keys, .env
 tools/reed-lib.sh                   shared helpers for the shell scripts
 seed-identity.sh / seed-reed.sh     DCP identity seeding / per-owner EDC seeding

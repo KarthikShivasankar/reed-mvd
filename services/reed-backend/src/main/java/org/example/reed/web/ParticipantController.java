@@ -28,7 +28,8 @@ import java.util.Set;
 @RestController
 public class ParticipantController {
 
-    public record Entry(String bpn, String name, String shortName, String role, boolean consortium, String country,
+    public record Entry(String bpn, String name, String shortName, String role, boolean consortium,
+                        boolean illustrative, String country,
                         String city, String vatId, double lat, double lon, boolean portAccess, boolean railAccess,
                         List<String> sectors, String connectorName, String did, String dspUrl,
                         Set<String> verifiedCerts, CapabilityClaim capability) {
@@ -63,7 +64,7 @@ public class ParticipantController {
     }
 
     private Entry entry(Participant p) {
-        return new Entry(p.bpn, p.name, p.shortName, p.role, p.consortium, p.country, p.city, p.vatId, p.lat, p.lon,
+        return new Entry(p.bpn, p.name, p.shortName, p.role, p.consortium, p.illustrative, p.country, p.city, p.vatId, p.lat, p.lon,
                 p.portAccess, p.railAccess, p.sectors, p.connectorName, p.did, p.dspUrl,
                 credentials.verifiedCerts(p), p.capability);
     }

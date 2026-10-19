@@ -240,6 +240,9 @@ export function Participants({ ctx }: { ctx: Ctx }) {
                 </div>
               </header>
               {!p.consortium && <div className="warn-box">Not a consortium member</div>}
+              {p.illustrative && (
+                <div className="warn-box">Real company, illustrative only: its RFQs are invented demo scenarios and nothing here is a claim about it.</div>
+              )}
               {p.capability && <p className="member-summary">{p.capability.summary}</p>}
               {p.capability && (
                 <dl className="member-facts">

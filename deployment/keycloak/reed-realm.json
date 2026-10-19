@@ -366,6 +366,33 @@
       "requiredActions": []
     },
     {
+      "username": "komatsu-buyer",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Demo",
+      "lastName": "User",
+      "email": "komatsu-buyer@reed.example",
+      "attributes": {
+        "bpn": [
+          "BPN-REED-OEM-0003"
+        ],
+        "participant": [
+          "komatsu"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "reed-demo",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "buyer"
+      ],
+      "requiredActions": []
+    },
+    {
       "username": "vagant-buyer",
       "enabled": true,
       "emailVerified": true,

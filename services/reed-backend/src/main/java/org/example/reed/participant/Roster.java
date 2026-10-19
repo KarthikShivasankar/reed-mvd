@@ -34,6 +34,7 @@ public final class Roster {
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record ParticipantSpec(String bpn, String name, @JsonProperty("short") String shortName, String role, Boolean consortium,
+                                  Boolean illustrative,
                                   String country, String city, String vatId, double lat, double lon,
                                   boolean portAccess, boolean railAccess, List<String> sectors,
                                   ConnectorSpec connector, String identity, List<String> attestations,

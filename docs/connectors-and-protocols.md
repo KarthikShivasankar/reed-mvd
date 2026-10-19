@@ -22,7 +22,7 @@ Every container in the REED stack, its ports, and who talks to whom. Generated f
 ## Port convention
 
 Each connector has a two-digit prefix `<p>`: **19** nordvind, **29** castellum, **41** hanse,
-**42** wisla, **43** maasvlakte, **44** rhein-ndt, **39** federated catalog. Its IdentityHub's admin
+**42** wisla, **43** maasvlakte, **44** rhein-ndt, **45** komatsu, **39** federated catalog. Its IdentityHub's admin
 API is published on `<p>081`. Every published port is bound to `127.0.0.1`.
 
 | Port | Path | Context | Called by | Exposed on host |

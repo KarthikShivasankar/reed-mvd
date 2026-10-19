@@ -46,5 +46,13 @@
     "supportedProtocols": [
       "dataspace-protocol-http:2025-1"
     ]
+  },
+  {
+    "name": "komatsu",
+    "id": "did:web:komatsu-ih%3A7083:komatsu",
+    "url": "http://komatsu:45194/protocol/2025-1",
+    "supportedProtocols": [
+      "dataspace-protocol-http:2025-1"
+    ]
   }
 ]

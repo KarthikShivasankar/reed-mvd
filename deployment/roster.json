@@ -1,5 +1,5 @@
 {
-  "_comment": "Single source of truth for REED participants. Edit this file, then run `python3 tools/gen_topology.py`. All companies are FICTIONAL European companies placed in real EU/EEA industrial clusters; VAT ids are illustrative, not real registrations.",
+  "_comment": "Single source of truth for REED participants. Edit this file, then run `python3 tools/gen_topology.py`. All companies are FICTIONAL European companies placed in real EU/EEA industrial clusters; VAT ids are illustrative, not real registrations. The one exception is Komatsu Mining Germany GmbH, included at the user's request as an ILLUSTRATIVE buyer: its RFQs are invented demo scenarios, and no certifications, capabilities, registrations or business relations are claimed for it.",
   "dataspace": {
     "name": "REED",
     "demoPassword": "reed-demo",
@@ -350,6 +350,21 @@
       "attestations": ["ISO9001"],
       "relations": [{ "type": "PROJECT_MEMBER", "to": "BPN-REED-OEM-0001" }],
       "users": []
+    },
+    {
+      "bpn": "BPN-REED-OEM-0003",
+      "name": "Komatsu Mining Germany GmbH",
+      "short": "Komatsu",
+      "role": "OEM",
+      "_comment": "Real company, illustrative use only: European plant of Komatsu (hydraulic mining shovels). RFQs are invented; no certifications, capabilities or relations are claimed. BPN is fictional; no VAT id given.",
+      "illustrative": true,
+      "country": "DE", "city": "Düsseldorf", "vatId": null,
+      "lat": 51.23, "lon": 6.78, "portAccess": false, "railAccess": false,
+      "sectors": ["heavy-machinery"],
+      "connector": { "name": "komatsu", "portPrefix": "45" },
+      "attestations": [],
+      "assets": ["PartDigitalTwin", "BillOfMaterial"],
+      "users": [{ "username": "komatsu-buyer", "roles": ["buyer"] }]
     },
     {
       "bpn": "BPN-REED-OPERATOR",

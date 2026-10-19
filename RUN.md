@@ -68,7 +68,7 @@ everything persists across `down`/`up`.
 
 ```bash
 ./run-transfer.sh                         # EDC under DCP: 1 contract + pull, 2 refusals
-./run-matchmaking.sh                      # 9 scenarios; SCENARIO=R1 for one
+./run-matchmaking.sh                      # 11 scenarios; SCENARIO=R1 for one
 ./run-persistence.sh                      # down + up (volumes kept), then checks nothing was lost
 ./gradlew :services:reed-backend:test     # scorer, fixtures, assistant guardrails
 cd services/reed-dashboard && npx playwright test   # UI end to end (npx playwright install chromium once)

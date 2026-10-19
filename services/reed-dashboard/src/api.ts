@@ -54,6 +54,8 @@ export interface Participant {
   shortName: string;
   role: string;
   consortium: boolean;
+  /** a real company used only in invented demo scenarios */
+  illustrative: boolean;
   country: string;
   city: string;
   vatId: string;

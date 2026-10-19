@@ -39,5 +39,9 @@ tasks.bootJar {
 tasks.test {
     useJUnitPlatform()
     // Scenario fixtures live in deployment/ (single source shared with the stack).
-    systemProperty("reed.deployment", rootProject.layout.projectDirectory.dir("deployment").asFile.absolutePath)
+    val deployment = rootProject.layout.projectDirectory.dir("deployment")
+    systemProperty("reed.deployment", deployment.asFile.absolutePath)
+    // re-run the scenario tests whenever the roster or the scenarios change
+    inputs.file(deployment.file("roster.json"))
+    inputs.dir(deployment.dir("scenarios"))
 }

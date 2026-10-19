@@ -41,6 +41,9 @@ public class Participant {
 
     public boolean consortium;
 
+    /** A real company used only in invented demo scenarios: nothing about it is a factual claim. */
+    public boolean illustrative;
+
     public String country;
 
     public String city;

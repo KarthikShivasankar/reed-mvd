@@ -30,7 +30,7 @@ dashboard config.
 ```
 
 Port prefixes are two digits giving ports `<p>191`-`<p>195`, `<p>291` and the IdentityHub admin
-port `<p>081`; they must stay below 65535, so use 10-64 and avoid the ones in use (19, 29, 39, 41-44).
+port `<p>081`; they must stay below 65535, so use 10-64 and avoid the ones in use (19, 29, 39, 41-45).
 The generator also gives the newcomer its own IdentityHub (`<name>-ih`), database, Vault folder,
 policy and token.
 
