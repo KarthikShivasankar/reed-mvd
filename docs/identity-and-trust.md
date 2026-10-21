@@ -58,6 +58,8 @@ credentials) from **who a person is** (proved to the REED backend with a Keycloa
 | Contract | contract definition's **contract policy**, from the asset's template | `oem-only` → `MembershipCredential.role eq OEM` |
 | Usage | `reed:odrl` asset property + REED audit | no redistribution, delete after pilot expiry, audit every pull |
 
+Why ODRL + CEL (and not OPA), what each layer enforces today and the gaps: [policy-languages.md](policy-languages.md).
+
 `run-transfer.sh` proves all three: Nordvind (OEM) gets Castellum's process capability; Castellum
 (SUPPLIER) is refused Wisła's (`Constraint 'MembershipCredential.role' EQ 'OEM'`); Hanse, with no
 supply relation to Nordvind, does not even see Nordvind's bill of material.
