@@ -47,7 +47,7 @@
       "sectors": ["wind", "offshore", "hydro"],
       "connector": { "name": "castellum", "portPrefix": "29" },
       "attestations": ["ISO9001", "DNV", "PED"],
-      "relations": [{ "type": "SUPPLIES", "to": "BPN-REED-OEM-0001" }],
+      "relations": [{ "type": "SUPPLIES", "to": "BPN-REED-OEM-0001" }, { "type": "PROJECT_MEMBER", "to": "BPN-REED-OEM-0001" }],
       "capability": {
         "summary": "Heavy sand casting of ductile iron, cast steel and martensitic stainless up to 60 t; in-house heat treatment and rough machining.",
         "processes": ["sand-casting", "heat-treatment", "machining-milling"],
@@ -164,6 +164,7 @@
       "sectors": ["wind", "offshore", "hydro", "rail", "heavy-machinery"],
       "connector": { "name": "maasvlakte", "portPrefix": "43" },
       "attestations": ["ISO9001", "DNV"],
+      "relations": [{ "type": "PROJECT_MEMBER", "to": "BPN-REED-OEM-0001" }],
       "capability": {
         "summary": "Heavy-lift and abnormal-load logistics: SPMT transport, load-out, sea-fastening for parts up to 2,000 t.",
         "processes": ["heavy-lift", "load-out", "sea-fastening"],

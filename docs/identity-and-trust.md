@@ -42,13 +42,39 @@ credentials) from **who a person is** (proved to the REED backend with a Keycloa
 | Left operand | Holds when |
 |---|---|
 | `MembershipCredential` | the requester holds a membership credential with `membership == rightOperand` |
-| `MembershipCredential.role` | its `role == rightOperand` |
+| `MembershipCredential.role` | its `role` against the right operand, by operator: `eq`, `neq`, `isAnyOf` / `isNoneOf` (comma-separated list) |
+| `MembershipCredential.country` | its registered seat (`country`), same operators - e.g. `isAnyOf` the EU27 (+ IS, LI, NO for the EEA) |
 | `CertificationCredential.certification` | `certifications` contains the right operand |
 | `SupplierRelationCredential.partner` | `partners` contains the right operand (a BPN) |
 | `SupplierRelationCredential.project` | `projects` contains the right operand |
 
   Policy definitions are posted with the `https://w3id.org/edc/connector/management/v2` context
-  and **no** `@vocab`, so these operands stay bare strings.
+  and **no** `@vocab`, so these operands stay bare strings. The CEL rules read the operator as
+  `this.operator` (the EDC operator's name: `EQ`, `NEQ`, `IS_ANY_OF`, `IS_NONE_OF`). A permission's
+  constraints are AND-ed (`offshore-oem-eea`: role OEM *and* DNV *and* seat in the EU/EEA).
+
+  `PolicyEvaluator` (backend, pure, unit-tested) mirrors these rules over the same claims the issuer
+  issues (the `vc_*` views). REED uses it to show owners who would get an asset before anyone asks
+  (`/reed/policy/access`, `/reed/policy/preview`) and requesters what they can get (`/reed/policy/inbound`).
+  The connectors stay the authority: `run-interop.sh` asks every connector for every other's catalogue
+  and negotiates every distinct pair/policy, and fails if a connector and the evaluator disagree.
+
+### Owners set their terms
+
+`PUT /reed/assets/{assetId}/policy {discoverability, policyTemplate}` is accepted only from a user of the
+owning organisation (not the operator). REED stores the terms and publishes them to the owner's own
+connector at once (access + contract policy definitions, the asset's `reed:odrl`, the contract definition;
+POST, PUT on 409) and audits a `POLICY` event. Agreements already signed keep their terms; the next
+catalogue request and negotiation see the new ones. `seed-reed.sh` upserts the same way, so changed CEL
+rules and templates reach connectors seeded earlier.
+
+| Template | Constraint (credential) | Story in `deployment/scenarios/interop.json` |
+|---|---|---|
+| `eea-residency` | `MembershipCredential.country isAnyOf` EU27 + IS, LI, NO | X1: the Norwegian OEM qualifies |
+| `eu-member-states` | `MembershipCredential.country isAnyOf` EU27 | X2: the Norwegian OEM is refused |
+| `no-competing-suppliers` | `MembershipCredential.role isNoneOf SUPPLIER` | X3: a competing foundry is refused |
+| `dnv-certified` | `CertificationCredential.certification eq DNV` | X4: offshore class data |
+| `offshore-oem-eea` | role OEM + DNV + EU/EEA seat | X5: three credentials at once |
 
 ### How the REED policy layers map onto EDC
 

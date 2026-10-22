@@ -6,6 +6,7 @@
 
 package org.example.reed.domain;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -42,6 +43,11 @@ public class Observation {
     @Column(length = 2000)
     public String text;
 
+    /** the text with personal data removed: all that viewers outside the company see */
+    @JsonIgnore
+    @Column(length = 2000)
+    public String redactedText;
+
     @Column(length = 500)
     public String summary;
 
@@ -56,12 +62,13 @@ public class Observation {
     }
 
     public Observation(String participant, String machineId, String category, String severity, String text,
-                       String summary, String source, String author) {
+                       String redactedText, String summary, String source, String author) {
         this.participant = participant;
         this.machineId = machineId;
         this.category = category;
         this.severity = severity;
         this.text = text;
+        this.redactedText = redactedText;
         this.summary = summary;
         this.source = source;
         this.author = author;

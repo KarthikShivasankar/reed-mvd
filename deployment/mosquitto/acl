@@ -3,5 +3,9 @@
 user reed-backend
 topic readwrite reed/factory/#
 
-# a company's devices (username = its connector name) publish only under their own company
-pattern write reed/factory/%u/#
+# a company's devices (username = its connector name) publish only sensor readings under their own company:
+# <machine>/<sensor> and its history - never alerts or observations, which only REED publishes
+pattern write reed/factory/%u/+/+
+pattern write reed/factory/%u/+/+/history
+# and receive the commands REED sends to their own line (operator controls on the dashboard)
+pattern read reed/factory/%u/control

@@ -10,6 +10,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import org.example.reed.config.ReedProperties;
 import org.example.reed.domain.Asset;
 import org.example.reed.domain.Discoverability;
+import org.example.reed.policy.PolicyEvaluator;
 import org.example.reed.policy.PolicyTemplateRenderer;
 import org.example.reed.repo.AssetRepository;
 import org.example.reed.repo.ParticipantRepository;
@@ -52,7 +53,7 @@ public class EdcRenderService {
 
     /** Left operands the connectors can evaluate from verifiable credentials. */
     static final Set<String> CREDENTIAL_OPERANDS = Set.of(
-            "MembershipCredential", "MembershipCredential.role",
+            "MembershipCredential", "MembershipCredential.role", "MembershipCredential.country",
             "CertificationCredential.certification", "SupplierRelationCredential.partner",
             "SupplierRelationCredential.project");
 
@@ -101,7 +102,7 @@ public class EdcRenderService {
         return assets.findByOwnerBpnOrderByAssetId(owner).stream().map(this::contractDefinition).toList();
     }
 
-    private Map<String, Object> asset(Asset a) {
+    public Map<String, Object> asset(Asset a) {
         var faithfulOdrl = templates.findById(a.policyTemplate)
                 .map(t -> (Object) renderer.render(t, "*", a.ownerBpn, a.assetId))
                 .orElse(Map.of());
@@ -140,44 +141,57 @@ public class EdcRenderService {
     }
 
     private List<Map<String, Object>> accessConstraints(Discoverability d, String owner) {
-        if (!dcp()) {
-            return List.of();
-        }
+        return dcp() ? access(d, owner).stream().map(EdcRenderService::constraint).toList() : List.of();
+    }
+
+    /** Catalogue layer: who may discover an asset of this discoverability (relations are relative to the owner). */
+    public static List<PolicyEvaluator.Constraint> access(Discoverability d, String owner) {
         return switch (d) {
-            case consortium -> List.of(constraint("MembershipCredential", "eq", "active"));
-            case bilateral -> List.of(constraint("SupplierRelationCredential.partner", "eq", owner));
-            case project -> List.of(constraint("SupplierRelationCredential.project", "eq", owner));
+            case consortium -> List.of(new PolicyEvaluator.Constraint("MembershipCredential", "eq", "active"));
+            case bilateral -> List.of(new PolicyEvaluator.Constraint("SupplierRelationCredential.partner", "eq", owner));
+            case project -> List.of(new PolicyEvaluator.Constraint("SupplierRelationCredential.project", "eq", owner));
         };
     }
 
-    /** The template's credential-backed permission constraints (other operands stay REED-side). */
     private List<Map<String, Object>> contractConstraints(String templateName, String owner) {
-        if (!dcp()) {
-            return List.of();
-        }
-        var out = new ArrayList<Map<String, Object>>();
+        return dcp() ? contract(templateName, owner).stream().map(EdcRenderService::constraint).toList() : List.of();
+    }
+
+    /** Contract layer: the template's credential-backed permission constraints (other operands stay REED-side). */
+    public List<PolicyEvaluator.Constraint> contract(String templateName, String owner) {
+        var out = new ArrayList<PolicyEvaluator.Constraint>();
         templates.findById(templateName).ifPresent(t -> {
             JsonNode odrl = renderer.render(t, "*", owner, "");
             for (var permission : odrl.path("permission")) {
                 for (var c : permission.path("constraint")) {
                     var left = c.path("leftOperand").asText();
                     if (CREDENTIAL_OPERANDS.contains(left)) {
-                        out.add(constraint(left, c.path("operator").asText(), c.path("rightOperand").asText()));
+                        out.add(new PolicyEvaluator.Constraint(left, c.path("operator").asText(), c.path("rightOperand").asText()));
                     }
                 }
             }
         });
         if (out.isEmpty()) {
-            out.add(constraint("MembershipCredential", "eq", "active"));
+            out.add(new PolicyEvaluator.Constraint("MembershipCredential", "eq", "active"));
         }
         return out;
     }
 
-    private static Map<String, Object> constraint(String left, String op, String right) {
+    /** The access policy definition for one discoverability, for one owner's connector. */
+    public Map<String, Object> accessPolicyDefinition(Discoverability d, String owner) {
+        return policyDefinition(accessPolicyId(d), accessConstraints(d, owner));
+    }
+
+    /** The contract policy definition of one template, for one owner's connector. */
+    public Map<String, Object> contractPolicyDefinition(String templateName, String owner) {
+        return policyDefinition(contractPolicyId(templateName), contractConstraints(templateName, owner));
+    }
+
+    private static Map<String, Object> constraint(PolicyEvaluator.Constraint k) {
         var c = new LinkedHashMap<String, Object>();
-        c.put("leftOperand", left);
-        c.put("operator", op);
-        c.put("rightOperand", right);
+        c.put("leftOperand", k.leftOperand());
+        c.put("operator", k.operator());
+        c.put("rightOperand", k.rightOperand());
         return c;
     }
 
@@ -208,12 +222,13 @@ public class EdcRenderService {
      * CEL expressions binding each credential left operand to a check over the
      * requester's verified credentials ({@code ctx.agent.claims.vc}). Registered
      * on every connector (all are providers), evaluated in catalog, negotiation
-     * and transfer scopes.
+     * and transfer scopes. {@link org.example.reed.policy.PolicyEvaluator} mirrors them.
      */
     public List<Map<String, Object>> celExpressions() {
         return List.of(
                 cel("MembershipCredential", "MembershipCredential", "cs.membership == this.rightOperand"),
-                cel("MembershipCredential.role", "MembershipCredential", "cs.role == this.rightOperand"),
+                cel("MembershipCredential.role", "MembershipCredential", byOperator("role")),
+                cel("MembershipCredential.country", "MembershipCredential", byOperator("country")),
                 cel("CertificationCredential.certification", "CertificationCredential", contains("certifications")),
                 cel("SupplierRelationCredential.partner", "SupplierRelationCredential", contains("partners")),
                 cel("SupplierRelationCredential.project", "SupplierRelationCredential", contains("projects")));
@@ -223,6 +238,17 @@ public class EdcRenderService {
         // ponytail: delimited-string claims (",A,B,") keep the issuer's database attestation one row per holder;
         // switch to JSON-array claims if the issuer gains list mappings.
         return "cs." + claim + ".contains(',' + string(this.rightOperand) + ',')";
+    }
+
+    /** eq / neq / isAnyOf / isNoneOf ({@code this.operator} is the EDC operator's name) over a single-valued claim. */
+    private static String byOperator(String claim) {
+        var v = "cs." + claim;
+        var r = "string(this.rightOperand)";
+        var inList = "(',' + " + r + " + ',').contains(',' + " + v + " + ',')";
+        return "(this.operator == 'NEQ' ? " + v + " != " + r
+                + " : this.operator == 'IS_ANY_OF' ? " + inList
+                + " : this.operator == 'IS_NONE_OF' ? !" + inList
+                + " : " + v + " == " + r + ")";
     }
 
     private static Map<String, Object> cel(String leftOperand, String credentialType, String subjectCheck) {
@@ -239,7 +265,7 @@ public class EdcRenderService {
         return def;
     }
 
-    private Map<String, Object> contractDefinition(Asset a) {
+    public Map<String, Object> contractDefinition(Asset a) {
         var criterion = new LinkedHashMap<String, Object>();
         criterion.put("@type", "Criterion");
         criterion.put("operandLeft", EDC_VOCAB + "id");

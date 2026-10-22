@@ -7,7 +7,10 @@
 #   3. the simulated devices' 7-day history is stored; every sensor is analysed
 #   4. an operator observation is tagged and published on MQTT without the author or personal data
 #   5. a shift briefing is produced
-#   6. who sees what: own line only; the operator reads any line but cannot report; no token, no data
+#   6. who sees what: own line only; the operator reads any line (operators' notes redacted, no author) but cannot
+#      report or steer it; no token, no data
+#   7. the toy factory in real time: a company injects a fault from REED -> its devices (MQTT control topic) ->
+#      readings -> ALARM + MQTT alert; maintenance brings the machine back
 #
 # Usage: ./run-factory.sh   (stack up). Exit code 0 = all PASS.
 set -euo pipefail
@@ -26,6 +29,9 @@ mqtt_pub castellum wrong -t reed/factory/castellum/x/y -m 1 2>/dev/null && fail 
 (mqtt_sub -t reed/factory/wisla/spoof/x -C 1 -W 5 >"$TMP/spoof" 2>/dev/null || true) &
 sleep 1; mqtt_pub castellum "$MQTT_PASSWORD_CASTELLUM" -t reed/factory/wisla/spoof/x -m '{"ts":1,"value":1}'; wait
 [[ ! -s $TMP/spoof ]] && pass "castellum's device cannot publish under wisla" || fail "spoofed reading delivered: $(cat "$TMP/spoof")"
+(mqtt_sub -t reed/factory/castellum/alerts -C 1 -W 5 >"$TMP/fake" 2>/dev/null || true) &
+sleep 1; mqtt_pub castellum "$MQTT_PASSWORD_CASTELLUM" -t reed/factory/castellum/alerts -m '{"status":"OK","finding":"all fine"}'; wait
+[[ ! -s $TMP/fake ]] && pass "a device cannot publish alerts (only REED can)" || fail "fake alert delivered: $(cat "$TMP/fake")"
 
 log "2. a device reading reaches the company's live stream (MQTT -> REED -> server-sent events via nginx)"
 timeout 12 curl -sN "$UI/reed/factory/stream" -H "Authorization: Bearer $C" >"$TMP/castellum.sse" 2>/dev/null &
@@ -75,7 +81,31 @@ api "$A" GET "/reed/factory?participant=wisla" >"$TMP/a"
 [[ $(jq -r .participant "$TMP/a") == wisla ]] && pass "the operator reads wisla's line" || fail "operator: $(head -c 200 "$TMP/a")"
 api "$A" POST /reed/factory/observations '{"text":"x"}' >/dev/null
 [[ $(status) == 403 ]] && pass "the operator cannot report on a company's line" || fail "operator posted: $(status)"
+api "$A" GET "/reed/factory/observations?participant=castellum" >"$TMP/ao"
+jq -e 'length > 0 and all(.[]; .author == null) and (map(.text) | join(" ") | test("612") | not)' "$TMP/ao" >/dev/null \
+  && pass "the operator sees operators' notes redacted and without author" || fail "operator sees: $(head -c 300 "$TMP/ao")"
+api "$C" GET /reed/factory/observations | jq -e '.[0].author == "castellum-engineer"' >/dev/null \
+  && pass "the company itself sees its notes in full" || fail "castellum's own view lacks the author"
+api "$A" POST /reed/factory/control '{"action":"maintain","machineId":"furnace-1"}' >/dev/null
+[[ $(status) == 403 ]] && pass "the operator cannot steer a company's line" || fail "operator steered: $(status)"
 [[ $(curl -s -o /dev/null -w '%{http_code}' "$UI/reed/factory") == 401 ]] && pass "no token: 401" || fail "anonymous access"
+
+log "7. toy factory in real time: fault -> ALARM + MQTT alert -> maintenance -> back to normal"
+SENSOR=castellum/fettling-1/spindle-vibration
+state_of() { api "$C" GET /reed/factory/insights | jq -r --arg k "$SENSOR" '.[] | select(.sensorKey==$k) | .status'; }
+api "$C" POST /reed/factory/control '{"action":"bogus","machineId":"fettling-1"}' >/dev/null
+[[ $(status) == 400 ]] && pass "unknown command refused" || fail "bogus command: $(status)"
+(mqtt_sub -t reed/factory/castellum/alerts -C 1 -W 200 >"$TMP/alert" 2>/dev/null || true) &
+sleep 1
+api "$C" POST /reed/factory/control '{"action":"spike","machineId":"fettling-1","sensorId":"spindle-vibration"}' | jq -r .what
+st=""; for _ in $(seq 1 40); do st=$(state_of); [[ $st == ALARM ]] && break; sleep 5; done
+[[ $st == ALARM ]] && pass "spike fault -> $SENSOR in ALARM: $(api "$C" GET /reed/factory/insights | jq -r --arg k "$SENSOR" '.[] | select(.sensorKey==$k) | .finding')" \
+  || fail "no ALARM after the fault (status $st)"
+wait
+grep -q "$SENSOR" "$TMP/alert" && pass "alert published on reed/factory/castellum/alerts" || fail "no MQTT alert: $(cat "$TMP/alert")"
+api "$C" POST /reed/factory/control '{"action":"maintain","machineId":"fettling-1"}' | jq -r .what
+for _ in $(seq 1 48); do st=$(state_of); [[ $st != ALARM ]] && break; sleep 5; done
+[[ $st != ALARM ]] && pass "after maintenance $SENSOR is $st again" || fail "still ALARM after maintenance"
 
 log "done"
 exit $FAILED

@@ -8,7 +8,6 @@ package org.example.reed.factory;
 
 import jakarta.servlet.http.HttpServletResponse;
 import org.example.reed.assistant.AssistantController;
-import org.example.reed.domain.Observation;
 import org.example.reed.security.CurrentUser;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -23,6 +22,7 @@ import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * The shop-floor view of a company's line. The line is the caller's own organisation's (from the token);
@@ -32,6 +32,9 @@ import java.util.List;
 public class FactoryController {
 
     public record ObservationForm(String text, String machineId) {
+    }
+
+    public record ControlForm(String action, String machineId, String sensorId) {
     }
 
     private final FactoryService factory;
@@ -57,19 +60,31 @@ public class FactoryController {
     }
 
     @GetMapping("/reed/factory/observations")
-    public List<Observation> observations(@AuthenticationPrincipal Jwt jwt, @RequestParam(required = false) String participant) {
-        return factory.observations(resolve(jwt, participant));
+    public List<FactoryService.ObservationView> observations(@AuthenticationPrincipal Jwt jwt,
+                                                             @RequestParam(required = false) String participant) {
+        var line = resolve(jwt, participant);
+        return factory.observations(line, own(jwt, line));
     }
 
     /** Only the company's own people report on its line. */
     @PostMapping("/reed/factory/observations")
-    public Observation observe(@AuthenticationPrincipal Jwt jwt, @RequestBody ObservationForm f) {
+    public FactoryService.ObservationView observe(@AuthenticationPrincipal Jwt jwt, @RequestBody ObservationForm f) {
         var user = CurrentUser.of(jwt);
         if (!factory.hasLine(user.participant())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "only people of a company with a shop-floor line can report on it");
         }
         return factory.observe(user.participant(), f.text(), f.machineId(), user.username(), user.bpn(),
                 AssistantController.personNames(jwt));
+    }
+
+    /** Only the company's own people steer its line; the operator watches. */
+    @PostMapping("/reed/factory/control")
+    public Map<String, Object> control(@AuthenticationPrincipal Jwt jwt, @RequestBody ControlForm f) {
+        var user = CurrentUser.of(jwt);
+        if (!factory.hasLine(user.participant())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "only people of a company with a shop-floor line can steer it");
+        }
+        return factory.control(user.participant(), f.action(), f.machineId(), f.sensorId(), user.username(), user.bpn());
     }
 
     @GetMapping("/reed/factory/briefing")
@@ -82,7 +97,13 @@ public class FactoryController {
     public SseEmitter stream(@AuthenticationPrincipal Jwt jwt, @RequestParam(required = false) String participant,
                              HttpServletResponse response) {
         response.setHeader("X-Accel-Buffering", "no");  // nginx in front of the backend must not buffer the stream
-        return factory.subscribe(resolve(jwt, participant));
+        var line = resolve(jwt, participant);
+        return factory.subscribe(line, own(jwt, line));
+    }
+
+    /** One of the company's own people (not the operator looking in). */
+    private static boolean own(Jwt jwt, String line) {
+        return line.equals(CurrentUser.of(jwt).participant());
     }
 
     private String resolve(Jwt jwt, String requested) {

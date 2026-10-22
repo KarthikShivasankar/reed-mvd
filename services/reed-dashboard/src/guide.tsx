@@ -52,6 +52,17 @@ export const TAB_HELP: Record<string, TabHelp> = {
     ],
     usage: "Accepting a shortlist tells the buyer you want to quote; the buyer can then contract for your confidential capability.",
   },
+  dataspace: {
+    role: "What sharing through REED gives your company, live: you set the terms of your own data, and see what your credentials open at the others.",
+    contains: [
+      "My data, my terms: every asset you offer against every company - who finds it (◉) and who gets a contract (✓) - and why, credential by credential. Change who can find it or the contract terms, preview the effect, publish to your connector.",
+      "What I can get: the credentials your connector presents (role, registered seat, certifications, supply relations, projects) and every asset you may discover, with a live 'Get it' through the real connectors: catalogue, contract, transfer, watermarked payload.",
+      "Cross-border stories: EU/EEA residency, EU-programme data, competitors kept out, DNV-only offshore data, three credentials at once, supply-chain-only data, live production status in a pilot.",
+      "Why a data space: each advantage and the screen that proves it.",
+    ],
+    usage: "The predictions come from REED's mirror of the connectors' CEL rules over the same credentials; the connectors decide. ./run-interop.sh checks both agree for every company pair.",
+    layer: "catalogue + contract layer",
+  },
   factory: {
     role: "Your own shop floor: sensors from the machines on your line (live and the last 7 days), what operators noticed, and what to do next.",
     contains: [
@@ -60,7 +71,7 @@ export const TAB_HELP: Record<string, TabHelp> = {
       "Operators' observations in plain language, tagged by machine, category and severity by the local model (personal data removed first).",
       "A shift briefing that joins the sensor findings with the observations.",
     ],
-    usage: "Devices publish over MQTT (reed/factory/<company>/...); REED stores and analyses every reading each minute and publishes status changes and observations back on MQTT. Only your organisation and the dataspace operator see your line.",
+    usage: "Devices publish over MQTT (reed/factory/<company>/...); REED stores and analyses every reading each minute and publishes status changes and observations back on MQTT. Line controls send a fault or a maintenance command to your own devices (reed/factory/<company>/control) so you can watch an alarm arise and clear in real time. Only your organisation and the dataspace operator see your line; the operator sees operators' notes redacted and cannot steer it.",
   },
   assistant: {
     role: "A question-answering helper for matchmaking, running on a local model (Qwen3.8 via LiteLLM) inside the deployment.",

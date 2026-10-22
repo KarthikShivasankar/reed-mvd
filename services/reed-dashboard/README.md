@@ -19,7 +19,9 @@ React 18 + Vite + TypeScript SPA, served by nginx on `:8088` (container port 808
 | `src/main.tsx`, `src/auth.ts`, `src/config.ts` | boot: config → login → app |
 | `src/App.tsx` | shell, routing, role-aware nav, organisation badge |
 | `src/api.ts` | typed REED client and `runReedFlow()` (catalog → negotiate → transfer → EDR → pull) |
-| `src/views/Overview.tsx` | organisation, open work, the 9 scenarios, topology |
+| `src/views/Overview.tsx` | organisation, open work, the 11 scenarios, topology |
+| `src/views/DataSpace.tsx` | who gets my data (board + terms editor, preview, publish), what I can get (credentials, live contract + pull), cross-border stories, why a data space |
+| `src/views/Factory.tsx` | shop floor: live sensors, history, attention, briefing, line controls (fault / maintenance), observations |
 | `src/views/Marketplace.tsx` | RFQ list, RFQ form with local-LLM drafting |
 | `src/views/Matches.tsx` | ranking (score bars), rejections, partners, explanation, contract-and-confirm flow |
 | `src/views/Opportunities.tsx`, `src/views/Assistant.tsx` | supplier view, chat |

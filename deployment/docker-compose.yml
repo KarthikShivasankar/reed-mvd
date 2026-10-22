@@ -101,13 +101,18 @@ services:
       interval: 5s
       retries: 90
 
-  # ---------- Local LLM gateway: LiteLLM -> Ollama (host) / vLLM, model Qwen3.8 ----------
+  # ---------- LLM gateway: LiteLLM -> Ollama (host) / vLLM Qwen3.8 by default; frontier APIs opt-in ----------
+  # Every LLM call goes through LiteLLM. A frontier route works only when its key is set in deployment/.env
+  # and REED_LLM_MODEL names it (see deployment/litellm/config.yaml); unset keys leave it unused.
   litellm:
     image: ghcr.io/berriai/litellm:main-v1.89.2
     container_name: reed-litellm
     command: ["--config", "/app/config.yaml", "--port", "4000"]
     environment:
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      MISTRAL_API_KEY: ${MISTRAL_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
     extra_hosts: ["host.docker.internal:host-gateway"]
     volumes:
       - ./litellm/config.yaml:/app/config.yaml:ro

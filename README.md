@@ -11,11 +11,13 @@ only after a contract** - and every connector proves who it is with **verifiable
 
 | | |
 |---|---|
-| **Connectors** | 6 EDC `0.17.0` connectors (control + data plane, Postgres-backed stores), one per company, plus a federated catalog |
+| **Connectors** | 7 EDC `0.17.0` connectors (control + data plane, Postgres-backed stores), one per company, plus a federated catalog |
 | **Identity for organisations** | Decentralized Claims Protocol (DCP): **one IdentityHub per company**, a REED Issuer Service, `did:web`, Membership / Certification / SupplierRelation credentials. EDC policies are CEL rules over those credentials. Secrets in a persistent Vault, each company confined to its own folder |
 | **Identity for people** | Keycloak (OIDC, PKCE): roles `buyer`, `supplier-engineer`, `quality-auditor`, `admin`; the token carries the user's organisation |
 | **Matchmaking** | Hard filters + six weighted criteria (lead time, tolerance margin, logistics for bulky parts, track record, sector, embedded CO2 for CBAM) with per-criterion explanations, partner recommendations and a contract-backed match lifecycle |
-| **Assistant** | Local LLM only: **Qwen3.8** via **LiteLLM**, routed to **Ollama** (default) or **vLLM**; personal data is redacted, scores come from the scorer |
+| **Sovereign terms** | Each owner sets, per asset, who finds it and who may sign - role, registered seat (EU / EEA), certification, supply relation, shared project - and publishes it to its own connector from the **Data space** view; nobody else (not the operator) can change it. REED predicts who gets what; `run-interop.sh` checks every connector pair agrees |
+| **Shop floor** | Each company's (simulated) line publishes sensors over MQTT; REED analyses trends every minute, tags operators' notes with the LLM, briefs the shift. A "toy factory": inject a fault or maintain a machine from the dashboard and watch the alarm arise and clear. A supplier's live line state reaches a customer only inside its production-status payload, under contract |
+| **Assistant** | Every LLM call goes through **LiteLLM**: local **Qwen3.8** on **Ollama** (default) or **vLLM**; frontier APIs (Anthropic, Mistral, OpenAI) opt-in with a key. Personal data is redacted before any call; scores come from the scorer |
 | **Real cases** | 11 RFQs across wind, shipbuilding/offshore, rail/heavy machinery (incl. mining shovels) and hydropower; 15 fictional European companies in real EU industrial clusters plus Komatsu Mining Germany as an illustrative buyer |
 
 > State survives restarts: Vault (file storage, auto-unsealed), every connector, IdentityHub,
@@ -89,7 +91,8 @@ docker compose -f deployment/docker-compose.yml up --build -d
 ./run-transfer.sh        # DCP contract + EDR pull, and two credential-based refusals
 ./run-matchmaking.sh     # all 11 scenarios, full lifecycle where both sides run a connector
 ./run-persistence.sh     # full stop/start without wiping volumes: nothing needs re-seeding
-./run-factory.sh         # shop floor: sensors over MQTT -> REED -> live dashboard, observations, briefing
+./run-factory.sh         # shop floor: MQTT ACLs, live stream, observations, briefing, fault -> alarm -> maintenance
+./run-interop.sh         # every company x every company: catalogues + contracts as predicted, 8 cross-border stories
 (cd services/reed-dashboard && npm ci && npx playwright install chromium && npx playwright test)
 ```
 
@@ -100,12 +103,12 @@ Open **http://127.0.0.1:8088** (an IP, so a browser that once saw HSTS for `loca
 | `nordvind-buyer` | Nordvind Energy Systems (OEM, Stavanger NO) | Matches → R1 rotor hub: shortlist Castellum, later *Request capability via contract* |
 | `hanse-buyer` | Hanse Marine & Rail (OEM, Kiel DE) | R4 jacket node, R6 bogie frame |
 | `komatsu-buyer` | Komatsu Mining Germany (illustrative, Düsseldorf DE) | K1 swing-circle carrier: full contract with Castellum |
-| `castellum-engineer` | Castellum Fundición (foundry, Bilbao ES) | Opportunities: accept the shortlist |
+| `castellum-engineer` | Castellum Fundición (foundry, Bilbao ES) | Opportunities: accept the shortlist. **Data space**: set the process capability to `eu-member-states`, see Nordvind (NO) flip to refused, publish. **Factory → Line controls**: inject a spike |
 | `wisla-engineer` | Wisła Precision Machining (Gdańsk PL) | Opportunities: R2 bearing ring |
 | `rhein-auditor`, `maasvlakte-engineer` | service providers | partner recommendations, audit |
 | `nordvind-quality` | Nordvind | audit trail of its own organisation |
 | `vagant-buyer` | Vagant Components (**not** a member) | sees nothing, cannot post |
-| `reed-admin` | dataspace operator | every view, any member's catalogue |
+| `reed-admin` | dataspace operator | every view, any member's catalogue; Data space *Look as* any company (cannot change its terms) |
 
 Stop with `docker compose -f deployment/docker-compose.yml down` and start again with `up -d` -
 no seeding needed. `down -v` wipes Vault and Postgres (then run steps 3-4 again). Every published
@@ -135,17 +138,35 @@ illustrative. The one exception is **Komatsu Mining Germany GmbH** (Düsseldorf)
 **illustrative buyer**: K1 and K2 are invented scenarios, not actual Komatsu purchases, and no
 certifications, capabilities, registrations or relations are claimed for it (the dashboard labels it).
 
+## LLM routing
+
+The backend talks to one OpenAI-compatible endpoint, LiteLLM, by the alias in `REED_LLM_MODEL`
+(default `reed-llm`, local Qwen3.8). To use a frontier model instead, add its key and the alias to
+`deployment/.env` (kept across `gen_topology.py` runs) and recreate LiteLLM and the backend:
+
+```bash
+echo 'MISTRAL_API_KEY=...'         >> deployment/.env   # or ANTHROPIC_API_KEY / OPENAI_API_KEY
+echo 'REED_LLM_MODEL=reed-llm-mistral' >> deployment/.env  # reed-llm-claude / reed-llm-openai
+docker compose -f deployment/docker-compose.yml up -d litellm reed-backend
+```
+
+Routes live in `deployment/litellm/config.yaml`; a frontier route falls back to the local model if it
+fails. Whatever the route, REED sends organisation and part data only (personal data is redacted
+first), and every number in an answer must come from REED's own data or the answer is discarded.
+
 ## Repository layout
 
 ```
 deployment/roster.json              single source of truth: participants, capabilities, credentials, users
 deployment/scenarios/matchmaking.json   the 11 RFQs + expected outcomes
+deployment/scenarios/interop.json   8 cross-border data-sharing stories (owner terms -> who gets a contract)
 tools/gen_topology.py               roster -> compose file, connector/identity configs, realm, keys, .env
 tools/reed-lib.sh                   shared helpers for the shell scripts
 seed-identity.sh / seed-reed.sh     DCP identity seeding / per-owner EDC seeding
-run-transfer.sh / run-matchmaking.sh    end-to-end verification
+run-transfer.sh / run-matchmaking.sh / run-interop.sh / run-factory.sh / run-persistence.sh    end-to-end verification
 services/reed-backend/              Spring Boot: registry, matchmaking, assistant, BFF, usage decisions (Flyway)
 services/data-service/              each company's payload service (stdlib Python): licence + watermark
+services/factory-sim/               each line's simulated devices (stdlib Python + paho-mqtt): readings, faults, maintenance
 services/reed-dashboard/            React + Vite SPA, Keycloak login, Playwright e2e tests
 launchers/{connector,federated-catalog,identity-hub,issuerservice}/   EDC 0.17.0 runtimes
 extensions/{http-pull-proxy,static-node-directory,superuser-seed}/    small EDC extensions

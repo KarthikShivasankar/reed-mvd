@@ -1,7 +1,14 @@
-# Local LLM gateway for the REED assistant. The backend only ever talks to the
-# OpenAI-compatible alias `reed-llm`; LiteLLM routes it to Qwen3.8 served by
-# Ollama on the host (default) and falls back to vLLM (compose profile "vllm").
-# Nothing is sent outside the deployment.
+# LLM gateway for the REED assistant. The backend only ever talks to LiteLLM, by the alias in
+# REED_LLM_MODEL (deployment/.env, default `reed-llm`):
+#
+#   reed-llm          Qwen3.8 on Ollama on the host (default, local)
+#   reed-llm-vllm     Qwen3.8 on vLLM (compose profile "vllm", local)
+#   reed-llm-claude   Anthropic API     - needs ANTHROPIC_API_KEY in deployment/.env
+#   reed-llm-mistral  Mistral API (EU)  - needs MISTRAL_API_KEY
+#   reed-llm-openai   OpenAI API        - needs OPENAI_API_KEY
+#
+# Frontier routes fall back to the local model when they fail (e.g. no key). Whatever the route, the
+# backend sends organisation and part data only: personal data is redacted first (PersonalDataRedactor).
 model_list:
   - model_name: reed-llm
     litellm_params:
@@ -15,11 +22,26 @@ model_list:
       api_base: http://vllm:8000/v1
       extra_body:
         chat_template_kwargs: { enable_thinking: false }
+  - model_name: reed-llm-claude
+    litellm_params:
+      model: anthropic/claude-sonnet-5-5
+      api_key: os.environ/ANTHROPIC_API_KEY
+  - model_name: reed-llm-mistral
+    litellm_params:
+      model: mistral/mistral-large-latest
+      api_key: os.environ/MISTRAL_API_KEY
+  - model_name: reed-llm-openai
+    litellm_params:
+      model: openai/gpt-5
+      api_key: os.environ/OPENAI_API_KEY
 
 router_settings:
   fallbacks:
     - reed-llm: ["reed-llm-vllm"]
     - reed-llm-vllm: ["reed-llm"]
+    - reed-llm-claude: ["reed-llm"]
+    - reed-llm-mistral: ["reed-llm"]
+    - reed-llm-openai: ["reed-llm"]
   num_retries: 1
   timeout: 120
 

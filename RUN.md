@@ -70,6 +70,8 @@ everything persists across `down`/`up`.
 ./run-transfer.sh                         # EDC under DCP: 1 contract + pull, 2 refusals
 ./run-matchmaking.sh                      # 11 scenarios; SCENARIO=R1 for one
 ./run-persistence.sh                      # down + up (volumes kept), then checks nothing was lost
+./run-factory.sh                          # shop floor: MQTT auth/ACL, live stream, observations, fault -> alarm
+./run-interop.sh                          # 7x6 catalogues + 52 negotiations as predicted, 8 stories; SCENARIO=X2 for one
 ./gradlew :services:reed-backend:test     # scorer, fixtures, assistant guardrails
 cd services/reed-dashboard && npx playwright test   # UI end to end (npx playwright install chromium once)
 ```
@@ -85,7 +87,7 @@ RFQs each run, so it can be repeated.
 | dashboard | `docker compose -f deployment/docker-compose.yml up --build -d dashboard` |
 | connector / extension | rebuild the jar, `up --build -d <connectors>` (stores persist; no seeding) |
 | roster or scenarios | `python3 tools/gen_topology.py`, then `down -v`, `up --build -d`, both seed scripts |
-| LiteLLM routing | edit `deployment/litellm/config.yaml`, `docker compose ... restart litellm` |
+| LiteLLM routing | edit `deployment/litellm/config.yaml`, `docker compose ... restart litellm`; frontier model: key + `REED_LLM_MODEL` in `deployment/.env` (README, *LLM routing*) |
 
 ## Troubleshooting
 

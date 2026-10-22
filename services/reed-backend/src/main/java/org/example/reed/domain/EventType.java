@@ -21,5 +21,7 @@ public enum EventType {
     /** a matchmaking lifecycle step (RFQ posted, shortlist, accept, confirm, feedback). */
     MATCH,
     /** the LLM assistant was used (records redactions, never the prompt). */
-    ASSIST
+    ASSIST,
+    /** an owner changed an asset's terms (who may discover it, contract policy) and republished it. */
+    POLICY
 }

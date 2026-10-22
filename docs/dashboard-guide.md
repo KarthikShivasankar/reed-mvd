@@ -39,6 +39,20 @@ has a collapsible "What this view is for" explainer; this guide follows a full m
 
 ## Other things to try
 
+- **Data space → My data, my terms** (as `castellum-engineer`): the board shows, for each of your
+  assets, which company finds it (◉) and which gets a contract (✓), with the reason per credential.
+  Pick *Process Capability*, set the contract terms to `eu-member-states`: the column previews
+  Nordvind (Norway - EEA, not EU) turning refused before anything is published. *Publish to my
+  connector*, then log in as `nordvind-buyer` → *What I can get* → *Try anyway*: Castellum's connector
+  refuses on `MembershipCredential.country`. Set it back to `oem-only` afterwards.
+- **Data space → What I can get**: the credentials your connector presents and everything you may
+  discover (nothing else is listed). *Get it* runs catalogue → contract → transfer → watermarked
+  payload through the real connectors.
+- **Data space → Cross-border stories**: the eight `run-interop.sh` stories; *Try it now* on the
+  requests made by your company, *Apply these terms* on your own assets.
+- **Factory → Line controls** (as `castellum-engineer` or `wisla-engineer`): *Inject spike* on a sensor -
+  the tile turns *Alarm* within about a minute and an alert goes out on MQTT; *Maintain* clears it.
+
 - **Marketplace → Post an RFQ**: describe a part in plain text and *Fill the form from this
   text* - the local model drafts it, personal details (names, e-mails, phones) are removed first.
 - **Assistant**: "Why was Śląsk Odlewnia rejected for R1?", "Compare the suppliers for R9".
@@ -53,6 +67,8 @@ has a collapsible "What this view is for" explainer; this guide follows a full m
 | View | buyer | supplier-engineer | quality-auditor | admin |
 |---|---|---|---|---|
 | Overview, Marketplace, Assistant, Catalogue, EDC catalog, Audit, Members, Policies, Matrix | ✓ | ✓ | ✓ | ✓ |
+| Data space (own terms: change; others: look) | ✓ | ✓ | ✓ | look as any company |
+| Factory (own line; controls + notes) | if the organisation runs a line | same | same | any line, read-only |
 | Matches (full ranking of own RFQs) | ✓ | own row via link | own organisation | all |
 | Opportunities | | ✓ | | ✓ |
 | Contracts (own connector) | if the organisation runs one | same | same | all connectors |
@@ -62,4 +78,6 @@ has a collapsible "What this view is for" explainer; this guide follows a full m
 ```bash
 ./run-transfer.sh                 # the EDC exchange of step 6, plus two refusals
 SCENARIO=R1 ./run-matchmaking.sh  # steps 2-6 over the APIs
+./run-interop.sh                  # the Data space view's predictions vs every connector, and the stories
+./run-factory.sh                  # Factory view incl. fault -> alarm -> maintenance
 ```

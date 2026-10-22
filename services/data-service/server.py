@@ -82,6 +82,8 @@ class Handler(BaseHTTPRequestHandler):
         if status != 200 or not decision.get("allow"):
             return self.send(403 if status in (200, 403) else 503, {"reason": decision.get("reason", "denied")})
         payload = json.loads(file.read_text())
+        if "shopFloor" in decision:  # production status: the company's line right now, from REED's analysis
+            payload["shopFloor"] = decision["shopFloor"]
         licence = decision["license"]
         payload["_reedLicense"] = {**licence, "watermark": watermark(payload, licence)}
         self.send(200, payload)

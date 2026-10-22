@@ -97,7 +97,23 @@ public class FactoryService implements MqttCallback {
     public record Briefing(String headline, List<String> actions, String source, String model) {
     }
 
+    /**
+     * An observation as one viewer may see it: the company's own people get the original text and author;
+     * viewers outside the company (the dataspace operator) get the text with personal data removed, no author.
+     */
+    public record ObservationView(Long id, String participant, String machineId, String category, String severity,
+                                  String text, String summary, String source, String author, Instant createdAt) {
+        static ObservationView of(Observation o, boolean own) {
+            return new ObservationView(o.id, o.participant, o.machineId, o.category, o.severity,
+                    own ? o.text : o.redactedText, o.summary, o.source, own ? o.author : null, o.createdAt);
+        }
+    }
+
     private record Sensor(String participant, Roster.MachineSpec machine, Roster.SensorSpec spec) {
+    }
+
+    /** A live dashboard; {@code own}: a person of the company (else the operator, who gets redacted data). */
+    private record Listener(SseEmitter emitter, boolean own) {
     }
 
     private final JdbcTemplate jdbc;
@@ -117,7 +133,7 @@ public class FactoryService implements MqttCallback {
     private final Map<String, Sensor> sensors = new LinkedHashMap<>();
     private final Map<String, Point> latest = new ConcurrentHashMap<>();
     private final Map<String, Insight> insights = new ConcurrentHashMap<>();
-    private final Map<String, Set<SseEmitter>> listeners = new ConcurrentHashMap<>();
+    private final Map<String, Set<Listener>> listeners = new ConcurrentHashMap<>();
     private volatile MqttClient client;
 
     public FactoryService(JdbcTemplate jdbc, ObservationRepository observations, AuditEventRepository audit, LlmClient llm,
@@ -376,8 +392,31 @@ public class FactoryService implements MqttCallback {
         return out;
     }
 
-    public List<Observation> observations(String participant) {
-        return observations.findTop100ByParticipantOrderByCreatedAtDesc(participant);
+    /**
+     * The line's state right now, as a data product: per machine its worst status and what is not OK. Released to
+     * partners only inside the company's ProductionStatus payload, i.e. under an EDC contract (see the usage decision).
+     */
+    public Map<String, Object> summary(String participant) {
+        var all = insights(participant);
+        var machines = new ArrayList<Map<String, Object>>();
+        for (var m : lines.get(participant).machines()) {
+            var mine = all.stream().filter(i -> i.machineId().equals(m.id())).toList();
+            var worst = mine.stream().map(Insight::status).max(Comparator.naturalOrder()).orElse(Status.OK);
+            machines.add(Map.of("machine", m.name(), "status", worst,
+                    "findings", mine.stream().filter(i -> i.status() != Status.OK).map(Insight::finding).toList()));
+        }
+        var out = new LinkedHashMap<String, Object>();
+        out.put("line", lines.get(participant).name());
+        out.put("at", Instant.now().toString());
+        out.put("alarms", all.stream().filter(i -> i.status() == Status.ALARM).count());
+        out.put("warnings", all.stream().filter(i -> i.status() == Status.WARNING).count());
+        out.put("machines", machines);
+        return out;
+    }
+
+    public List<ObservationView> observations(String participant, boolean own) {
+        return observations.findTop100ByParticipantOrderByCreatedAtDesc(participant).stream()
+                .map(o -> ObservationView.of(o, own)).toList();
     }
 
     // ---------------------------------------------------------------- operators' observations
@@ -387,7 +426,7 @@ public class FactoryService implements MqttCallback {
      * by the local LLM - which only sees the text with personal data removed - or by rules. Published over MQTT
      * and to live dashboards without the author.
      */
-    public Observation observe(String participant, String text, String machineId, String author, String actorBpn,
+    public ObservationView observe(String participant, String text, String machineId, String author, String actorBpn,
                                Collection<String> personNames) {
         if (text == null || text.isBlank() || text.length() > 2000) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "an observation needs 1-2000 characters of text");
@@ -442,13 +481,56 @@ public class FactoryService implements MqttCallback {
             tag = new ObservationTagger.Tag(machineId, tag.category(), tag.severity(), tag.summary());  // the operator's choice wins
         }
         var o = observations.save(new Observation(participant, tag.machineId(), tag.category(), tag.severity(), text,
-                tag.summary(), source, author));
+                redacted.text(), tag.summary(), source, author));
         audit.save(new AuditEvent(EventType.ASSIST, actorBpn, null, "observation " + o.id + " on " + participant + " tagged via "
                 + source + ("llm".equals(source) ? " (" + llm.model() + ")" : "") + ", " + redacted.redactions() + " redaction(s)"));
         publish(participant, "observations", Map.of("id", o.id, "machineId", o.machineId == null ? "" : o.machineId,
                 "category", o.category, "severity", o.severity, "summary", o.summary, "at", o.createdAt.toString()));
-        broadcast(participant, "observation", o);
-        return o;
+        broadcast(participant, "observation", own -> ObservationView.of(o, own));
+        return ObservationView.of(o, true);
+    }
+
+    // ---------------------------------------------------------------- line controls (toy factory)
+
+    /**
+     * A command to the company's own line, sent over MQTT on {@code reed/factory/<company>/control} (the ACL lets
+     * only that company's devices read it): inject a fault ({@code drift}: past the limit in about 5 minutes,
+     * {@code spike}: past it at once) or maintain a machine (faults cleared, wear reset). The effect comes back
+     * as readings, so the same analysis, alerts and briefing apply as on a real line.
+     */
+    public Map<String, Object> control(String participant, String action, String machineId, String sensorId,
+                                       String actor, String actorBpn) {
+        var line = lines.get(participant);
+        var machine = line.machines().stream().filter(m -> m.id().equals(machineId)).findFirst()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "unknown machine " + machineId));
+        var cmd = new LinkedHashMap<String, Object>();
+        switch (action == null ? "" : action) {
+            case "drift", "spike" -> {
+                var sensor = machine.sensors().stream().filter(x -> x.id().equals(sensorId)).findFirst()
+                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "unknown sensor " + sensorId));
+                cmd.put("cmd", "fault");
+                cmd.put("machine", machine.id());
+                cmd.put("sensor", sensor.id());
+                cmd.put("kind", action);
+            }
+            case "maintain" -> {
+                cmd.put("cmd", "maintain");
+                cmd.put("machine", machine.id());
+            }
+            default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "action must be drift, spike or maintain");
+        }
+        var c = client;
+        if (c == null || !c.isConnected()) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "the shop-floor broker is not connected");
+        }
+        publish(participant, "control", cmd);
+        var what = "maintain".equals(action) ? "maintenance on " + machine.name()
+                : action + " fault on " + machine.name() + " / " + sensorId;
+        audit.save(new AuditEvent(EventType.ASSIST, actorBpn, null, actor + " sent " + what + " to the " + participant + " line"));
+        var event = Map.<String, Object>of("action", action, "machineId", machine.id(), "sensorId", sensorId == null ? "" : sensorId,
+                "what", what, "at", Instant.now().toString());
+        broadcast(participant, "control", event);
+        return event;
     }
 
     // ---------------------------------------------------------------- shift briefing
@@ -515,31 +597,37 @@ public class FactoryService implements MqttCallback {
 
     // ---------------------------------------------------------------- live stream
 
-    public SseEmitter subscribe(String participant) {
+    public SseEmitter subscribe(String participant, boolean own) {
         var emitter = new SseEmitter(Duration.ofMinutes(30).toMillis());
         var set = listeners.computeIfAbsent(participant, k -> new CopyOnWriteArraySet<>());
-        set.add(emitter);
-        emitter.onCompletion(() -> set.remove(emitter));
-        emitter.onTimeout(() -> set.remove(emitter));
-        emitter.onError(e -> set.remove(emitter));
+        var l = new Listener(emitter, own);
+        set.add(l);
+        emitter.onCompletion(() -> set.remove(l));
+        emitter.onTimeout(() -> set.remove(l));
+        emitter.onError(e -> set.remove(l));
         try {
             emitter.send(SseEmitter.event().name("hello").data(Map.of("participant", participant)));
         } catch (Exception e) {
-            set.remove(emitter);
+            set.remove(l);
         }
         return emitter;
     }
 
     private void broadcast(String participant, String event, Object data) {
+        broadcast(participant, event, own -> data);
+    }
+
+    /** {@code data}: what a listener gets, by whether it is one of the company's own people. */
+    private void broadcast(String participant, String event, java.util.function.Function<Boolean, Object> data) {
         var set = listeners.get(participant);
         if (set == null) {
             return;
         }
-        for (var e : set) {
+        for (var l : set) {
             try {
-                e.send(SseEmitter.event().name(event).data(data));
+                l.emitter().send(SseEmitter.event().name(event).data(data.apply(l.own())));
             } catch (Exception ex) {
-                set.remove(e);
+                set.remove(l);
             }
         }
     }

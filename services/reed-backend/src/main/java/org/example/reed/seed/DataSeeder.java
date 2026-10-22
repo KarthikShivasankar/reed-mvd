@@ -22,6 +22,7 @@ import org.example.reed.domain.Rfq;
 import org.example.reed.domain.Sensitivity;
 import org.example.reed.domain.SupplyChainRelation;
 import org.example.reed.participant.Roster;
+import org.example.reed.policy.PolicyEvaluator;
 import org.example.reed.repo.AssetClassificationRepository;
 import org.example.reed.repo.AssetRepository;
 import org.example.reed.repo.AuditEventRepository;
@@ -50,6 +51,9 @@ import java.time.LocalDate;
  */
 @Component
 public class DataSeeder implements CommandLineRunner {
+
+    private static final String EU = String.join(",", PolicyEvaluator.EU27);
+    private static final String EEA = EU + "," + String.join(",", PolicyEvaluator.EEA_EFTA);
 
     private static final Logger LOG = LoggerFactory.getLogger(DataSeeder.class);
 
@@ -97,37 +101,64 @@ public class DataSeeder implements CommandLineRunner {
     }
 
     private void seedPolicyTemplates() {
-        if (templates.count() > 0) {
-            return;
-        }
-        LOG.info("REED seed: policy templates");
         // Permission constraints use credential-backed left operands the EDC connectors evaluate
         // against the requester's verifiable credentials (DCP). Prohibitions, obligations and
         // expiry are the usage layer: carried as reed:odrl and enforced/audited REED-side.
-        templates.save(new PolicyTemplate("consortium-only",
+        template("consortium-only",
                 "Any REED consortium member (valid MembershipCredential) may use the data.",
                 "{\"permission\":[{\"action\":\"use\",\"constraint\":[{\"leftOperand\":\"MembershipCredential\",\"operator\":\"eq\",\"rightOperand\":\"active\"}]}],"
-                        + "\"prohibition\":[],\"obligation\":[{\"action\":\"reed:audit\"}]}"));
-        templates.save(new PolicyTemplate("bilateral-supplier",
+                        + "\"prohibition\":[],\"obligation\":[{\"action\":\"reed:audit\"}]}");
+        template("bilateral-supplier",
                 "Only a partner with a supply relation to the owner (SupplierRelationCredential) may use the data; no redistribution.",
                 "{\"permission\":[{\"action\":\"use\",\"constraint\":[{\"leftOperand\":\"SupplierRelationCredential.partner\",\"operator\":\"eq\",\"rightOperand\":\"$OWNER_BPN\"}]}],"
-                        + "\"prohibition\":[{\"action\":\"distribute\"}],\"obligation\":[{\"action\":\"reed:audit\"}]}"));
-        templates.save(new PolicyTemplate("dpp-read-only",
+                        + "\"prohibition\":[{\"action\":\"distribute\"}],\"obligation\":[{\"action\":\"reed:audit\"}]}");
+        template("dpp-read-only",
                 "Read-only access to the digital product passport (ESPR) for members; no modification or redistribution.",
                 "{\"permission\":[{\"action\":\"read\",\"constraint\":[{\"leftOperand\":\"MembershipCredential\",\"operator\":\"eq\",\"rightOperand\":\"active\"}]}],"
-                        + "\"prohibition\":[{\"action\":\"distribute\"},{\"action\":\"modify\"}],\"obligation\":[{\"action\":\"reed:audit\"}]}"));
-        templates.save(new PolicyTemplate("oem-only",
+                        + "\"prohibition\":[{\"action\":\"distribute\"},{\"action\":\"modify\"}],\"obligation\":[{\"action\":\"reed:audit\"}]}");
+        template("oem-only",
                 "Only members holding the OEM role may use the data; no redistribution.",
                 "{\"permission\":[{\"action\":\"use\",\"constraint\":[{\"leftOperand\":\"MembershipCredential.role\",\"operator\":\"eq\",\"rightOperand\":\"OEM\"}]}],"
-                        + "\"prohibition\":[{\"action\":\"distribute\"}],\"obligation\":[{\"action\":\"reed:audit\"}]}"));
-        templates.save(new PolicyTemplate("time-limited-pilot-access",
+                        + "\"prohibition\":[{\"action\":\"distribute\"}],\"obligation\":[{\"action\":\"reed:audit\"}]}");
+        template("time-limited-pilot-access",
                 "Members of a shared project may use the data until the pilot expiry; data must be deleted afterwards.",
                 "{\"permission\":[{\"action\":\"use\",\"constraint\":[{\"leftOperand\":\"SupplierRelationCredential.project\",\"operator\":\"eq\",\"rightOperand\":\"$OWNER_BPN\"},{\"leftOperand\":\"odrl:dateTime\",\"operator\":\"lteq\",\"rightOperand\":\"$EXPIRY\"}]}],"
-                        + "\"prohibition\":[{\"action\":\"distribute\"}],\"obligation\":[{\"action\":\"delete\",\"constraint\":[{\"leftOperand\":\"odrl:dateTime\",\"operator\":\"gt\",\"rightOperand\":\"$EXPIRY\"}]}]}"));
-        templates.save(new PolicyTemplate("simulation-service-only",
+                        + "\"prohibition\":[{\"action\":\"distribute\"}],\"obligation\":[{\"action\":\"delete\",\"constraint\":[{\"leftOperand\":\"odrl:dateTime\",\"operator\":\"gt\",\"rightOperand\":\"$EXPIRY\"}]}]}");
+        template("simulation-service-only",
                 "Only accredited service providers (SERVICE role) may use the data; no redistribution or derivation.",
                 "{\"permission\":[{\"action\":\"use\",\"constraint\":[{\"leftOperand\":\"MembershipCredential.role\",\"operator\":\"eq\",\"rightOperand\":\"SERVICE\"}]}],"
-                        + "\"prohibition\":[{\"action\":\"distribute\"},{\"action\":\"derive\"}],\"obligation\":[{\"action\":\"reed:audit\"}]}"));
+                        + "\"prohibition\":[{\"action\":\"distribute\"},{\"action\":\"derive\"}],\"obligation\":[{\"action\":\"reed:audit\"}]}");
+            // Sovereignty across borders: the registered seat in the MembershipCredential (operators isAnyOf/isNoneOf).
+        template("eea-residency",
+                "Only members registered in the EU/EEA may use the data (European data residency); no redistribution.",
+                "{\"permission\":[{\"action\":\"use\",\"constraint\":[{\"leftOperand\":\"MembershipCredential.country\",\"operator\":\"isAnyOf\",\"rightOperand\":\"" + EEA + "\"}]}],"
+                        + "\"prohibition\":[{\"action\":\"distribute\"}],\"obligation\":[{\"action\":\"reed:audit\"}]}");
+        template("eu-member-states",
+                "Only members seated in an EU member state may use the data (e.g. results of an EU-funded programme); EEA/EFTA members such as Norway are excluded.",
+                "{\"permission\":[{\"action\":\"use\",\"constraint\":[{\"leftOperand\":\"MembershipCredential.country\",\"operator\":\"isAnyOf\",\"rightOperand\":\"" + EU + "\"}]}],"
+                        + "\"prohibition\":[{\"action\":\"distribute\"}],\"obligation\":[{\"action\":\"reed:audit\"}]}");
+        template("no-competing-suppliers",
+                "Any member except other suppliers (competitors): OEMs and service providers only; no redistribution.",
+                "{\"permission\":[{\"action\":\"use\",\"constraint\":[{\"leftOperand\":\"MembershipCredential.role\",\"operator\":\"isNoneOf\",\"rightOperand\":\"SUPPLIER\"}]}],"
+                        + "\"prohibition\":[{\"action\":\"distribute\"}],\"obligation\":[{\"action\":\"reed:audit\"}]}");
+        template("dnv-certified",
+                "Only members with a verified DNV certification (offshore and maritime class) may use the data.",
+                "{\"permission\":[{\"action\":\"use\",\"constraint\":[{\"leftOperand\":\"CertificationCredential.certification\",\"operator\":\"eq\",\"rightOperand\":\"DNV\"}]}],"
+                        + "\"prohibition\":[{\"action\":\"distribute\"}],\"obligation\":[{\"action\":\"reed:audit\"}]}");
+        template("offshore-oem-eea",
+                "Three credentials at once: an OEM, DNV-certified, registered in the EU/EEA; no redistribution or derivation.",
+                "{\"permission\":[{\"action\":\"use\",\"constraint\":[{\"leftOperand\":\"MembershipCredential.role\",\"operator\":\"eq\",\"rightOperand\":\"OEM\"},"
+                        + "{\"leftOperand\":\"CertificationCredential.certification\",\"operator\":\"eq\",\"rightOperand\":\"DNV\"},"
+                        + "{\"leftOperand\":\"MembershipCredential.country\",\"operator\":\"isAnyOf\",\"rightOperand\":\"" + EEA + "\"}]}],"
+                        + "\"prohibition\":[{\"action\":\"distribute\"},{\"action\":\"derive\"}],\"obligation\":[{\"action\":\"reed:audit\"}]}");
+    }
+
+    /** Adds a template if it is missing (by name), so new templates reach databases seeded earlier. */
+    private void template(String name, String description, String odrl) {
+        if (!templates.existsById(name)) {
+            LOG.info("REED seed: policy template {}", name);
+            templates.save(new PolicyTemplate(name, description, odrl));
+        }
     }
 
     private void seedClassificationMatrix() {

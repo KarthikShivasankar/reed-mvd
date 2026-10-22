@@ -180,16 +180,19 @@ policy. CEL only answers "does this agreed policy allow this request now?"
 
 ## 6. Gaps today
 
+Closed since this report: credential constraints now take operators (`isAnyOf` / `isNoneOf` / `neq`) and a
+registered-seat operand (`MembershipCredential.country`, EU and EU/EEA templates); owners change terms at runtime;
+the pilot path runs (Castellum, Maasvlakte and Nordvind share a project, `run-interop.sh` X7).
+
 | Gap | Where | Effect |
 |---|---|---|
-| `odrl:dateTime` is dropped from the EDC policy | `EdcRenderService.java:164` (only credential operands are kept) | an expired pilot can still negotiate and start transfers; it is refused only at pull |
+| `odrl:dateTime` is dropped from the EDC policy | `EdcRenderService.contract()` (only credential operands are kept) | an expired pilot can still negotiate and start transfers; it is refused only at pull |
 | `$EXPIRY` is recomputed on every render | `PolicyTemplateRenderer.java:40` (`now + 30 days`) | the expiry shown in `reed:odrl` keeps moving forward |
 | Pull-time expiry ignores the policy | `Licence.java:29-38`, `application.yaml:51-52` | expiry is computed as signing time + a global `pilot-days`, not from the agreed `rightOperand` |
 | Prohibitions and obligations are not enforced | `Licence.java` copies them into the licence | `distribute`, `modify`, `derive` and `delete` are informational only |
-| The action is always `use` | `EdcRenderService.java:191` | `dpp-read-only`'s `read` is lost |
-| Agreed terms are not checked | `UsageController.java:114` renders the *current* template | if a template changes, an older agreement is judged by the new terms |
+| The action is always `use` | `EdcRenderService.policyDefinition()` | `dpp-read-only`'s `read` is lost |
+| Agreed terms are not checked | `UsageController` renders the asset's *current* template | an owner can change an asset's terms at any time (Data space view); an older agreement's licence then carries the new prohibitions and expiry, although the connector-side contract kept the old ones |
 | No purpose constraint | anywhere | purpose cannot be expressed or enforced |
-| The pilot path cannot be exercised | `deployment/roster.json` | the only `PROJECT_MEMBER` relation belongs to a participant without a connector, so no consumer qualifies for a `project` asset |
 
 ## 7. CEL vs OPA for REED
 

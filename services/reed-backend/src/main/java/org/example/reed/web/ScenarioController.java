@@ -35,4 +35,10 @@ public class ScenarioController {
     public String scenarios() throws IOException {
         return Files.readString(Path.of(props.getDeploymentDir(), "scenarios", "matchmaking.json"));
     }
+
+    /** Cross-border data-sharing stories (owner terms -> who gets a contract), see run-interop.sh. */
+    @GetMapping(value = "/reed/scenarios/interop", produces = MediaType.APPLICATION_JSON_VALUE)
+    public String interop() throws IOException {
+        return Files.readString(Path.of(props.getDeploymentDir(), "scenarios", "interop.json"));
+    }
 }

@@ -15,9 +15,10 @@ Invariant: *discover that data exists, but receive the payload only after an EDC
 Every connector proves membership, certifications and supply relations with credentials, and
 EDC policies are CEL rules over those credentials.
 
-Org/user constraints: the LLM must be **local** (LiteLLM → Ollama/vLLM, Qwen3.8) - never an
-external AI API; send it **no personal data** (organisation/part data only; redaction in
-`PersonalDataRedactor`). Companies in the roster are **fictional EU companies** - never attach
+Org/user constraints: every LLM call goes through **LiteLLM** (never a provider SDK from the backend);
+default **local** Qwen3.8 (Ollama/vLLM), frontier APIs (Anthropic, Mistral, OpenAI) only as opt-in
+routes (key + `REED_LLM_MODEL` in `deployment/.env`, `deployment/litellm/config.yaml`). Send it **no
+personal data** (organisation/part data only; redaction in `PersonalDataRedactor`). Companies in the roster are **fictional EU companies** - never attach
 fabricated claims to real firms. Exception, on the user's request: **Komatsu Mining Germany GmbH**
 (`"illustrative": true`) as a buyer in invented scenarios K1/K2 - no attestations, capabilities,
 VAT id or relations for it; keep it labelled illustrative everywhere.
@@ -34,7 +35,8 @@ docker compose -f deployment/docker-compose.yml up --build -d    # --profile vll
 ./run-transfer.sh                  # DCP e2e: 1 contract + pull, 2 credential refusals (exit 0 = all PASS)
 ./run-matchmaking.sh               # 11 scenarios (SCENARIO=K1 for one)
 ./run-persistence.sh               # down + up with volumes kept: nothing may need re-seeding
-./run-factory.sh                   # shop floor: MQTT auth/ACL, live stream, history, observations, briefing, scoping
+./run-factory.sh                   # shop floor: MQTT auth/ACL, live stream, history, observations, briefing, scoping, fault -> alarm
+./run-interop.sh                   # every connector x every other: catalogues + contracts match PolicyEvaluator; 8 stories (SCENARIO=X2)
 ./gradlew :services:reed-backend:test                          # scorer, fixtures, assistant guardrails
 cd services/reed-dashboard && npx playwright test              # UI e2e (stack must be up + seeded)
 docker compose -f deployment/docker-compose.yml down -v        # -v drops Vault + Postgres (seed again)
@@ -55,7 +57,8 @@ not hand-edit**), each `deployment/<connector>/config.properties`, one
 `deployment/dashboard/config.json`, the Keycloak realm, PEM keys and `deployment/.env` (all
 secrets: mgmt keys, per-identity IH keys and Vault tokens, Postgres/Keycloak passwords; gitignored,
 preserved across runs). All published ports bind to 127.0.0.1. Scenario RFQs + expected
-outcomes live in `deployment/scenarios/matchmaking.json`. Both files are bind-mounted into the
+outcomes live in `deployment/scenarios/matchmaking.json`; cross-border data-sharing stories (owner terms ->
+expected FINALIZED / TERMINATED / HIDDEN per company) in `deployment/scenarios/interop.json`. Both files are bind-mounted into the
 backend and seeded into an **empty** database (`down -v` to reseed).
 
 ### REED backend (`services/reed-backend/`, package `org.example.reed`)
@@ -71,6 +74,10 @@ Spring Boot 3.3 + Postgres, schema by **Flyway** (`db/migration`, Hibernate `val
 - `assistant/`: `LlmClient` (OpenAI-compatible → LiteLLM), `RuleRfqParser` (numbers are
   authoritative from rules), `PersonalDataRedactor`, `AssistantService` (draft, explain, tool chat;
   explanations with numbers not from the scorer are discarded).
+- `policy/`: `PolicyEvaluator` (pure mirror of the CEL rules over the `vc_*` claims, unit-tested),
+  `PolicyService` (who gets each asset and why, what-if preview, what a requester can discover - never
+  assets it may not discover -, owner-only term changes published to the owner's connector: POST, PUT on
+  409; `POLICY` audit). The connectors stay the authority; `run-interop.sh` fails if they disagree.
 - `edc/`: `EdcRenderService` renders per-owner assets, access policies (per discoverability) and
   contract policies (template credential constraints) + CEL expressions; `ConnectorClient` calls
   Management APIs with per-connector keys.
@@ -95,6 +102,8 @@ Spring Boot 3.3 + Postgres, schema by **Flyway** (`db/migration`, Hibernate `val
 - Vault: file storage, `vault-init` unseals on every `up` (root token revoked after the first run - new
   identities need `down -v`); each identity has folder `secret/<name>/`
   (`edc.vault.hashicorp.folder`), a policy limited to it and its own token (`VAULT_TOKEN_<NAME>`).
+- CEL rules are operator-aware (`this.operator`: EQ/NEQ/IS_ANY_OF/IS_NONE_OF) for `MembershipCredential.role`
+  and `.country` (EU/EEA templates); `seed-reed.sh` upserts (PUT on 409), so changed rules reach old connectors.
 - All three credential scopes are **DEFAULT** (presented on every request) - catalog requests
   carry no policy, so POLICY-scoped credentials never reach access policies.
 - **Policy JSON-LD gotcha**: policy definitions must use context
@@ -142,7 +151,13 @@ Spring Boot 3.3 + Postgres, schema by **Flyway** (`db/migration`, Hibernate `val
   the model may raise severity, never lower it below the `ObservationTagger` rules), fallback rules. Published on
   `reed/factory/<c>/observations` without author or personal data; the original text stays in the company's view.
 - Scoping: a user sees only their own company's line (`participant` claim); the operator reads any line
-  (`?participant=`) but cannot post observations.
+  (`?participant=`) - operators' notes redacted (`redacted_text`), no author - but cannot post observations or steer.
+- Toy factory: `POST /reed/factory/control {action: drift|spike|maintain}` (own company only) publishes on
+  `reed/factory/<c>/control`; the simulator applies it (drift: past the limit in ~5 min, spike: at once,
+  maintain: faults cleared + wear reset for the cycle). ACL: devices write only `<c>/+/+` and `<c>/+/+/history`
+  and read only `<c>/control`; alerts/observations are REED's alone.
+- Live data product: the usage decision for a `ProductionStatus` asset of a company with a line returns
+  `shopFloor` (`FactoryService.summary`), which its data service puts into the payload before watermarking.
 
 ### Ports and URL rule
 Connector prefixes: 19 nordvind, 29 castellum, 41 hanse, 42 wisla, 43 maasvlakte, 44 rhein-ndt, 45 komatsu,
@@ -157,5 +172,7 @@ IdentityHub admin `<prefix>081`, Issuer admin 10013/10015, Vault 8200, Postgres 
 
 ### Dashboard (`services/reed-dashboard/`)
 React + Vite + TS, keycloak-js login, all calls via the backend (bearer token), hash routing,
-role-aware nav. See its README for the file map. Playwright tests in `e2e/`. nginx serves
+role-aware nav. See its README for the file map. Playwright tests in `e2e/`. **Data space** view
+(`views/DataSpace.tsx`): owner's who-gets-what board + terms editor (preview, publish), requester's
+credentials + discoverable offers with a live contract/pull (`runReedFlow`), the interop stories, why a data space. nginx serves
 `index.html` with `no-cache` (hashed assets immutable).

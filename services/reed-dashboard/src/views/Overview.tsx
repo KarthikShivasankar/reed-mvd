@@ -67,6 +67,12 @@ export function Overview({ ctx }: { ctx: Ctx }) {
                 <li><a href="#/opportunities">{opps.data?.length ?? "…"} open RFQs</a> your capability qualifies for</li>
               )}
               {!session.has("buyer") && !session.has("supplier-engineer") && <li><a href="#/audit">Review the audit trail</a></li>}
+              {org?.connectorName && (
+                <li><a href="#/dataspace">Who gets your data</a> - set your terms and see what your credentials open at the others</li>
+              )}
+              {ctx.config.connectors.some((c) => c.factory && c.name === session.participant) && (
+                <li><a href="#/factory">Your shop floor</a> - live sensors, alerts, line controls</li>
+              )}
             </ul>
           </div>
         )}

@@ -124,6 +124,31 @@ export interface Observation {
 
 export interface Briefing { headline: string; actions: string[]; source: string; model: string | null }
 
+/* ---- who gets what (policy evaluator mirroring the connectors' CEL rules) ---- */
+export interface Access {
+  bpn: string; company: string; connector: string; country: string; role: string;
+  visible: boolean; discoverReason: string; granted: boolean; contractReason: string;
+}
+export interface AssetAccess {
+  assetId: string; title: string; assetClass: string; sensitivity: string; ownerBpn: string;
+  discoverability: string; policyTemplate: string; discoverTerms: string[]; contractTerms: string[]; access: Access[];
+}
+export interface Claims {
+  member: boolean; role: string | null; country: string | null;
+  certifications: string[]; partners: string[]; projects: string[];
+}
+export interface Offer {
+  assetId: string; title: string; assetClass: string; sensitivity: string; ownerBpn: string; owner: string;
+  ownerConnector: string; ownerCountry: string; policyTemplate: string; contractTerms: string[]; granted: boolean; reason: string;
+}
+export interface Inbound { claims: Claims; offers: Offer[] }
+export interface InteropRequest { consumer: string; expect: "FINALIZED" | "TERMINATED" | "HIDDEN"; reason?: string; pull?: string[] }
+export interface InteropScenario {
+  id: string; title: string; story: string; owner: string; asset: string;
+  terms: { discoverability: string; policyTemplate: string } | null; requests: InteropRequest[];
+}
+export interface ControlEvent { action: string; machineId: string; sensorId: string; what: string; at: string }
+
 export interface Me {
   username: string;
   roles: string[];
@@ -365,7 +390,21 @@ export class Api {
       }
     }
   }
+  control(action: "drift" | "spike" | "maintain", machineId: string, sensorId?: string) {
+    return this.call<ControlEvent>("POST", "/reed/factory/control", { action, machineId, sensorId });
+  }
   scenarios() { return this.call<ScenarioFile>("GET", "/reed/scenarios"); }
+  interopScenarios() { return this.call<{ scenarios: InteropScenario[] }>("GET", "/reed/scenarios/interop"); }
+
+  /* ---- data sovereignty: who gets an owner's data, and the owner's terms ---- */
+  policyAccess(owner?: string) { return this.call<AssetAccess[]>("GET", `/reed/policy/access${q({ owner })}`); }
+  policyPreview(assetId: string, discoverability: string, policyTemplate: string) {
+    return this.call<AssetAccess>("GET", `/reed/policy/preview${q({ assetId, discoverability, policyTemplate })}`);
+  }
+  setPolicy(assetId: string, discoverability: string, policyTemplate: string) {
+    return this.call<AssetAccess>("PUT", `/reed/assets/${seg(assetId)}/policy`, { discoverability, policyTemplate });
+  }
+  inbound(bpn?: string) { return this.call<Inbound>("GET", `/reed/policy/inbound${q({ bpn })}`); }
 
   /* ---- matchmaking ---- */
   rfqs() { return this.call<Rfq[]>("GET", "/reed/rfqs"); }
@@ -523,8 +562,11 @@ export async function runReedFlow(api: Api, consumer: string, provider: Connecto
 /** Pulls the first readable sentence out of an EDC policy failure. */
 export function policyReason(detail?: string): string {
   if (!detail) return "policy not fulfilled";
-  const m = detail.match(/Constraint '([^']+)' EQ '([^']+)'/);
-  return m ? `you need ${m[1]} = ${m[2]} (from a verifiable credential)` : detail.slice(0, 160);
+  const m = detail.match(/Constraint '([^']+)' (EQ|NEQ|IS_ANY_OF|IS_NONE_OF|IS_ALL_OF) '([^']+)'/);
+  if (!m) return detail.slice(0, 160);
+  const op = { EQ: "=", NEQ: "≠", IS_ANY_OF: "one of", IS_NONE_OF: "none of", IS_ALL_OF: "all of" }[m[2]];
+  const right = m[3].length > 60 ? `${m[3].split(",").length} values` : m[3].replace(/,/g, ", ");
+  return `you need ${m[1]} ${op} ${right} (from a verifiable credential)`;
 }
 
 /* ----------------------------- helpers --------------------------------- */

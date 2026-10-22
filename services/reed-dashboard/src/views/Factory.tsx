@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type PointerEvent } from "react";
 import type { Ctx } from "../App";
-import type { Briefing, FactoryLine, Insight, Observation, SensorStatus, SensorView, SeriesPoint } from "../api";
+import type { Briefing, ControlEvent, FactoryLine, Insight, Observation, SensorStatus, SensorView, SeriesPoint } from "../api";
 import { Led, Panel, Status, useAsync, useToast } from "../ui";
 import { Explainer, TAB_HELP } from "../guide";
 
@@ -39,6 +39,7 @@ export function Factory({ ctx }: { ctx: Ctx }) {
   const [live, setLive] = useState<Record<string, { ts: number; value: number }>>({});
   const [spark, setSpark] = useState<Record<string, [number, number][]>>({});
   const [liveObs, setLiveObs] = useState<Observation[]>([]);
+  const [controls, setControls] = useState<ControlEvent[]>([]);
   const [connected, setConnected] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
 
@@ -73,6 +74,8 @@ export function Factory({ ctx }: { ctx: Ctx }) {
               reloadInsights.current();
             } else if (event === "observation") {
               setLiveObs((o) => [data, ...o.filter((x) => x.id !== data.id)]);
+            } else if (event === "control") {
+              setControls((c) => [data, ...c].slice(0, 8));
             }
           }, abort.signal);
         } catch {
@@ -144,6 +147,8 @@ export function Factory({ ctx }: { ctx: Ctx }) {
 
       {sel && <HistoryPanel ctx={ctx} participant={participant} sensor={sel} />}
 
+      {!operator && line.data && <LineControls ctx={ctx} line={line.data} log={controls} onShow={setSelected} />}
+
       <Panel title="Operator observations" right={<span className="faint">tagged by the local model · personal data removed first</span>}>
         {!operator && line.data && <ObservationForm line={line.data} onSent={(o) => {
           setLiveObs((l) => [o, ...l.filter((x) => x.id !== o.id)]);
@@ -157,7 +162,7 @@ export function Factory({ ctx }: { ctx: Ctx }) {
                   <span className={`sev sev-${o.severity}`}>{o.severity}</span>
                   <span className="chip">{o.category}</span>
                   <span className="mono">{line.data?.machines.find((m) => m.id === o.machineId)?.name ?? "line"}</span>
-                  <span className="faint mono">{new Date(o.createdAt).toLocaleString()} · {o.author} · {o.source}</span>
+                  <span className="faint mono">{new Date(o.createdAt).toLocaleString()}{o.author ? ` · ${o.author}` : ""} · {o.source}</span>
                 </div>
                 <div className="obs-summary">{o.summary}</div>
                 {o.text !== o.summary && <div className="faint obs-text">“{o.text}”</div>}
@@ -167,6 +172,60 @@ export function Factory({ ctx }: { ctx: Ctx }) {
         </Status>
       </Panel>
     </>
+  );
+}
+
+/**
+ * The toy factory: send your own line a fault or a maintenance command (MQTT, reed/factory/<company>/control) and watch
+ * the readings, the minute-by-minute analysis, the alerts and the briefing react as they would on a real line.
+ */
+function LineControls({ ctx, line, log, onShow }: { ctx: Ctx; line: FactoryLine; log: ControlEvent[]; onShow: (key: string) => void }) {
+  const toast = useToast();
+  const [machineId, setMachineId] = useState(line.machines[0]?.id ?? "");
+  const machine = line.machines.find((m) => m.id === machineId) ?? line.machines[0];
+  const [sensorId, setSensorId] = useState(machine?.sensors[0]?.id ?? "");
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { setSensorId(machine?.sensors[0]?.id ?? ""); }, [machine]);
+
+  async function send(action: "drift" | "spike" | "maintain") {
+    setBusy(true);
+    try {
+      const e = await ctx.api.control(action, machine.id, action === "maintain" ? undefined : sensorId);
+      toast("ok", `Sent ${e.what}. REED analyses every minute: watch the tile and Needs attention.`);
+      if (action !== "maintain") onShow(`${line.participant}/${machine.id}/${sensorId}`);
+    } catch (err: any) {
+      toast("error", err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!machine) return null;
+  return (
+    <Panel title="Line controls" right={<span className="faint">simulated devices · commands over MQTT to your own line only</span>}>
+      <div className="line-controls">
+        <label className="inline">Machine
+          <select className="field" value={machine.id} onChange={(e) => setMachineId(e.target.value)}>
+            {line.machines.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+          </select>
+        </label>
+        <label className="inline">Sensor
+          <select className="field" value={sensorId} onChange={(e) => setSensorId(e.target.value)}>
+            {machine.sensors.map((s) => <option key={s.id} value={s.id}>{s.name} ({limits(s)})</option>)}
+          </select>
+        </label>
+        <button className="btn ghost" disabled={busy} onClick={() => send("drift")} title="Walks past its limit in about 5 minutes">Inject drift</button>
+        <button className="btn ghost" disabled={busy} onClick={() => send("spike")} title="Jumps past its limit at once">Inject spike</button>
+        <button className="btn" disabled={busy} onClick={() => send("maintain")} title="Clears this machine's faults and resets its wear">Maintain {machine.name}</button>
+      </div>
+      <p className="note">A drift walks the sensor past its limit in about 5 minutes, a spike jumps past it at once; maintenance clears the
+        machine's faults and resets its wear. Each command is audited.</p>
+      {log.length > 0 && (
+        <ul className="control-log">
+          {log.map((e) => <li key={e.at + e.what}><span className="faint mono">{new Date(e.at).toLocaleTimeString()}</span> {e.what}</li>)}
+        </ul>
+      )}
+    </Panel>
   );
 }
 

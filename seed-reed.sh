@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Seeds every participant's EDC connector from the REED backend (idempotent; 409 = exists).
+# Seeds every participant's EDC connector from the REED backend (idempotent: what exists is updated).
 #
 # REED is the source of truth: for each owner the backend renders assets, credential-constrained
 # policy definitions (access policy per discoverability + contract policy per template), contract
@@ -17,13 +17,21 @@ wait_for "REED backend" "$REED_BACKEND/reed/health"
 wait_for "Keycloak" "$KEYCLOAK/realms/reed/.well-known/openid-configuration"
 ADMIN=$(token reed-admin)
 
-post() { # post <connector> <path> <json>
-  local out code
-  out=$(curl -sS -w '\n%{http_code}' -X POST "$(mgmt_url "$1")$2" -H "X-Api-Key: $(mgmt_key "$1")" \
-          -H 'Content-Type: application/json' -d "$3")
-  code=$(tail -n1 <<<"$out")
-  if [[ $code == 2* ]]; then printf '  %s %s\n' "$code" "$(jq -r '."@id" // .id // ""' <<<"$(sed '$d' <<<"$out")")"
-  elif [[ $code == 409 ]]; then echo "  409 (exists)"
+send() { # send <METHOD> <connector> <path> <json> -> body + status line
+  curl -sS -w '\n%{http_code}' -X "$1" "$(mgmt_url "$2")$3" -H "X-Api-Key: $(mgmt_key "$2")" \
+       -H 'Content-Type: application/json' -d "$4"
+}
+
+post() { # post <connector> <path> <json>: create, or update what exists (409) so changed terms take effect
+  local out code id
+  id=$(jq -r '."@id"' <<<"$3")
+  out=$(send POST "$1" "$2" "$3"); code=$(tail -n1 <<<"$out")
+  if [[ $code == 409 ]]; then
+    # policy definitions and CEL rules are updated by id, assets and contract definitions by body
+    case $2 in */policydefinitions|*/celexpressions) out=$(send PUT "$1" "$2/$id" "$3") ;; *) out=$(send PUT "$1" "$2" "$3") ;; esac
+    code=$(tail -n1 <<<"$out"); [[ $code == 2* ]] && code="$code (updated)"
+  fi
+  if [[ $code == 2* ]]; then printf '  %s %s\n' "$code" "$id"
   else echo "  HTTP $code on $2: $(sed '$d' <<<"$out")" >&2; return 1; fi
 }
 

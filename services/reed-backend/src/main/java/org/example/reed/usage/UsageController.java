@@ -8,9 +8,11 @@ package org.example.reed.usage;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.example.reed.domain.AssetClass;
 import org.example.reed.domain.AuditEvent;
 import org.example.reed.domain.EventType;
 import org.example.reed.edc.ConnectorClient;
+import org.example.reed.factory.FactoryService;
 import org.example.reed.policy.PolicyTemplateRenderer;
 import org.example.reed.repo.AssetRepository;
 import org.example.reed.repo.AuditEventRepository;
@@ -60,11 +62,12 @@ public class UsageController {
     private final Clock clock;
     private final Map<String, String> dataKeys;
     private final Duration pilotLength;
+    private final FactoryService factory;
 
     public UsageController(AssetRepository assets, ParticipantRepository participants, PolicyTemplateRepository templates,
                            PolicyTemplateRenderer renderer, ConnectorClient connectors, AuditEventRepository audit,
                            ObjectMapper mapper, Clock clock, @Value("${reed.usage.data-keys:}") String dataKeys,
-                           @Value("${reed.usage.pilot-days}") long pilotDays) {
+                           @Value("${reed.usage.pilot-days}") long pilotDays, FactoryService factory) {
         this.assets = assets;
         this.participants = participants;
         this.templates = templates;
@@ -75,6 +78,7 @@ public class UsageController {
         this.clock = clock;
         this.dataKeys = ConnectorClient.parse(dataKeys);
         this.pilotLength = Duration.ofDays(pilotDays);
+        this.factory = factory;
     }
 
     @PostMapping("/reed/usage/decide")
@@ -122,6 +126,10 @@ public class UsageController {
         audit.save(new AuditEvent(EventType.PULL, owner.bpn, asset.assetId, "confidential payload of " + owner.bpn
                 + " released by its data service to " + consumer.bpn + " (verified: contract agreement " + licence.agreementId()
                 + (licence.expiresAt() != null ? ", licence until " + licence.expiresAt() : "") + ")"));
+        // A company's production status carries its shop floor's state right now (when it runs a line in REED).
+        if (asset.assetClass == AssetClass.ProductionStatus && factory.hasLine(company)) {
+            return ResponseEntity.ok(Map.of("allow", true, "license", licence, "shopFloor", factory.summary(company)));
+        }
         return ResponseEntity.ok(Map.of("allow", true, "license", licence));
     }
 

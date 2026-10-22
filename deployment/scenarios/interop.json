@@ -1,0 +1,103 @@
+{
+  "_comment": "Cross-border data-sharing stories between the REED companies (fictional EU firms). Each scenario: the owner sets an asset's terms (or keeps them: terms null), then companies ask for it through their own connectors. expect: FINALIZED (contract), TERMINATED (contract refused, reason names the unmet credential constraint) or HIDDEN (not even in the catalogue). pull: the consumer also pulls the payload and it must carry the listed keys. run-interop.sh runs them against the real connectors; the dashboard (Data space) previews them.",
+  "scenarios": [
+    {
+      "id": "X1",
+      "title": "European data residency includes Norway",
+      "story": "Castellum (Bilbao, ES) shares its confidential process capability only with members registered in the EU/EEA. Nordvind (Stavanger, NO) is outside the EU but inside the EEA, so it gets a contract like Hanse (Hamburg, DE).",
+      "owner": "castellum",
+      "asset": "process-capability-castellum",
+      "terms": { "discoverability": "consortium", "policyTemplate": "eea-residency" },
+      "requests": [
+        { "consumer": "nordvind", "expect": "FINALIZED" },
+        { "consumer": "hanse", "expect": "FINALIZED" }
+      ]
+    },
+    {
+      "id": "X2",
+      "title": "EU-programme results stay in EU member states",
+      "story": "The same capability, now produced in an EU-funded programme: only members seated in an EU member state may use it. The Norwegian OEM is refused by Castellum's connector on the country in its MembershipCredential; the German OEM is not.",
+      "owner": "castellum",
+      "asset": "process-capability-castellum",
+      "terms": { "discoverability": "consortium", "policyTemplate": "eu-member-states" },
+      "requests": [
+        { "consumer": "nordvind", "expect": "TERMINATED", "reason": "MembershipCredential.country" },
+        { "consumer": "hanse", "expect": "FINALIZED" }
+      ]
+    },
+    {
+      "id": "X3",
+      "title": "Competing suppliers kept out",
+      "story": "Wisła (Gdańsk, PL) shows its process capability to the whole consortium but contracts only with non-suppliers: OEMs and service providers yes, Castellum (a competing supplier) no.",
+      "owner": "wisla",
+      "asset": "process-capability-wisla",
+      "terms": { "discoverability": "consortium", "policyTemplate": "no-competing-suppliers" },
+      "requests": [
+        { "consumer": "castellum", "expect": "TERMINATED", "reason": "MembershipCredential.role" },
+        { "consumer": "maasvlakte", "expect": "FINALIZED" },
+        { "consumer": "hanse", "expect": "FINALIZED" }
+      ]
+    },
+    {
+      "id": "X4",
+      "title": "Offshore class data needs a DNV certificate",
+      "story": "Maasvlakte (Rotterdam, NL) releases its offshore load-out capability only to members with a verified DNV certification. Nordvind holds ISO 9001/14001 but no DNV attestation and is refused; Wisła is DNV-certified.",
+      "owner": "maasvlakte",
+      "asset": "process-capability-maasvlakte",
+      "terms": { "discoverability": "consortium", "policyTemplate": "dnv-certified" },
+      "requests": [
+        { "consumer": "nordvind", "expect": "TERMINATED", "reason": "CertificationCredential.certification" },
+        { "consumer": "wisla", "expect": "FINALIZED" }
+      ]
+    },
+    {
+      "id": "X5",
+      "title": "Three credentials at once",
+      "story": "Rhein NDT (DE) shares inspection evidence only with an OEM that is DNV-certified and registered in the EU/EEA. Hanse meets all three; Nordvind fails on DNV; Wisła fails on its role.",
+      "owner": "rhein-ndt",
+      "asset": "quality-evidence-rhein-ndt",
+      "terms": { "discoverability": "consortium", "policyTemplate": "offshore-oem-eea" },
+      "requests": [
+        { "consumer": "hanse", "expect": "FINALIZED" },
+        { "consumer": "nordvind", "expect": "TERMINATED", "reason": "CertificationCredential.certification" },
+        { "consumer": "wisla", "expect": "TERMINATED", "reason": "MembershipCredential.role" }
+      ]
+    },
+    {
+      "id": "X6",
+      "title": "Only the supply chain sees the bill of material",
+      "story": "Nordvind's bill of material is bilateral: Castellum, which supplies Nordvind, finds it, signs and pulls it; Hanse has no supply relation with Nordvind and does not even see that it exists.",
+      "owner": "nordvind",
+      "asset": "bill-of-material-nordvind",
+      "terms": null,
+      "requests": [
+        { "consumer": "castellum", "expect": "FINALIZED", "pull": ["_reedLicense"] },
+        { "consumer": "hanse", "expect": "HIDDEN" }
+      ]
+    },
+    {
+      "id": "X7",
+      "title": "Live production status inside a cross-border pilot",
+      "story": "Nordvind runs an offshore-wind pilot with Castellum (ES) and Maasvlakte (NL). Castellum's production status is project-scoped: Nordvind pulls it under a time-limited pilot licence and it carries Castellum's shop floor right now - machine states from its line in REED. Hanse is not in the pilot.",
+      "owner": "castellum",
+      "asset": "production-status-castellum",
+      "terms": null,
+      "requests": [
+        { "consumer": "nordvind", "expect": "FINALIZED", "pull": ["shopFloor", "_reedLicense"] },
+        { "consumer": "hanse", "expect": "HIDDEN" }
+      ]
+    },
+    {
+      "id": "X8",
+      "title": "The owner narrows its terms",
+      "story": "Castellum moves its capability from consortium-wide to its supply chain only. Hanse, which could contract under X1, no longer even finds it; Nordvind, Castellum's customer, still can. Agreements already signed keep their terms.",
+      "owner": "castellum",
+      "asset": "process-capability-castellum",
+      "terms": { "discoverability": "bilateral", "policyTemplate": "bilateral-supplier" },
+      "requests": [
+        { "consumer": "hanse", "expect": "HIDDEN" },
+        { "consumer": "nordvind", "expect": "FINALIZED" }
+      ]
+    }
+  ]
+}

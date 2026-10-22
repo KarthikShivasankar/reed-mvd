@@ -143,7 +143,7 @@ test("shop floor: live sensors over MQTT, history, operator observations and the
 
   const note = `E2E ${Date.now()}: oil dripping under the moulding line conveyor`;
   await page.locator("#obs-text").fill(note);
-  await page.getByLabel("Machine").selectOption("moulding-1");
+  await page.locator("form", { has: page.locator("#obs-text") }).getByLabel("Machine").selectOption("moulding-1");
   await page.getByRole("button", { name: "Log observation" }).click();
   await expect(page.locator(".obs", { hasText: note })).toContainText("Moulding line", { timeout: 150_000 });
   await expect(other.locator(".obs", { hasText: note })).toBeVisible({ timeout: 15_000 });
@@ -162,4 +162,85 @@ test("a company sees only its own shop floor", async ({ page }) => {
 
   await login(page, "nordvind-buyer");  // an OEM without a line: no Factory view
   await expect(page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Factory" })).toHaveCount(0);
+});
+
+/** Puts an asset's terms back through the API (password grant on the demo reed-cli client), whatever the test did. */
+async function restoreTerms(page: Page, user: string, assetId: string, discoverability: string, policyTemplate: string) {
+  const kc = await page.request.post("/realms/reed/protocol/openid-connect/token", {
+    form: { grant_type: "password", client_id: "reed-cli", username: user, password: PASSWORD },
+  });
+  const { access_token } = await kc.json();
+  const res = await page.request.put(`/reed/assets/${assetId}/policy`, {
+    headers: { Authorization: `Bearer ${access_token}` }, data: { discoverability, policyTemplate },
+  });
+  expect(res.status()).toBe(200);
+}
+
+test("an owner previews and publishes its terms, and the other side's connector enforces them", async ({ page }) => {
+  try {
+    await login(page, "castellum-engineer", "dataspace");
+    await expect(page.locator(".panel-head", { hasText: "Who gets Castellum's data" })).toBeVisible();
+    await page.locator(".board-asset", { hasText: "Process Capability" }).click();
+    await page.locator("#tmpl").selectOption("eu-member-states");
+    // a what-if preview first: nothing is published yet
+    const preview = page.locator(".panel", { hasText: "If you publish" });
+    await expect(preview.locator("li", { hasText: "Nordvind" })).toContainText("registered in NO, but the policy needs registered seat in the EU");
+    await expect(preview.locator("li", { hasText: "Hanse" })).toContainText("gets a contract");
+    await page.getByRole("button", { name: "Publish to my connector" }).click();
+    await expect(page.locator(".toast.ok")).toContainText("Published to Castellum's connector: 4 companies' access changed");
+
+    // Nordvind (Norway: EEA, not EU) now sees the refusal coming, and Castellum's connector does refuse it
+    await login(page, "nordvind-buyer", "dataspace");
+    await page.getByRole("tab", { name: "What I can get" }).click();
+    await expect(page.locator(".wallet")).toContainText("OEM");
+    const offer = page.locator("li.offer", { hasText: "Process Capability - Castellum" });
+    await expect(offer).toContainText("Castellum will refuse: registered in NO");
+    await offer.getByRole("button", { name: "Try anyway" }).click();
+    await expect(offer.locator(".error-box")).toContainText("Refused by Castellum's connector", { timeout: 90_000 });
+    await expect(offer.locator(".error-box")).toContainText("MembershipCredential.country");
+  } finally {
+    await restoreTerms(page, "castellum-engineer", "process-capability-castellum", "consortium", "oem-only");
+  }
+});
+
+test("a requester gets a contract and a watermarked payload live from the Data space view", async ({ page }) => {
+  await login(page, "castellum-engineer", "dataspace");
+  await page.getByRole("tab", { name: "What I can get" }).click();
+  // Castellum supplies Nordvind: it finds Nordvind's bilateral bill of material, a company without that relation would not
+  const offer = page.locator("li.offer", { hasText: "Bill of Material - Nordvind" });
+  await offer.getByRole("button", { name: "Get it" }).click();
+  await expect(offer.locator(".ok-box")).toContainText("payload received through Nordvind's data plane", { timeout: 120_000 });
+  await expect(offer.locator(".wallet.compact")).toContainText("BPN-REED-SUP-0002");
+
+  await login(page, "hanse-buyer", "dataspace");
+  await page.getByRole("tab", { name: "What I can get" }).click();
+  await expect(page.locator(".panel", { hasText: "From Nordvind" })).toBeVisible();
+  await expect(page.getByText("Bill of Material - Nordvind")).toHaveCount(0);
+});
+
+test("the operator looks as any company but cannot change its terms", async ({ page }) => {
+  await login(page, "reed-admin", "dataspace");
+  await page.getByLabel("Look as").selectOption("wisla");
+  await expect(page.locator(".panel-head", { hasText: "Who gets Wisła's data" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Publish to my connector" })).toHaveCount(0);
+  await expect(page.getByText("Only Wisła can change these terms")).toBeVisible();
+  await page.getByRole("tab", { name: "Cross-border stories" }).click();
+  await expect(page.locator(".story")).toHaveCount(8);
+  await page.locator(".story", { hasText: "EU-programme results" }).getByRole("button", { name: "Predict" }).click();
+  await expect(page.locator(".story", { hasText: "EU-programme results" })).toContainText("REED predicts is refused");
+});
+
+test("toy factory: a fault sent from the dashboard raises an alarm in real time, maintenance clears it", async ({ page }) => {
+  await login(page, "castellum-engineer", "factory");
+  const controls = page.locator(".line-controls");
+  await controls.getByLabel("Machine").selectOption("fettling-1");
+  await controls.getByLabel("Sensor").selectOption("spindle-vibration");
+  await page.getByRole("button", { name: "Inject spike" }).click();
+  await expect(page.locator(".toast.ok")).toContainText("spike fault on Fettling CNC");
+  await expect(page.locator(".control-log")).toContainText("spike fault on Fettling CNC");
+  // the devices react within one reading (5 s); REED's minute-by-minute analysis raises the alarm
+  await expect(page.locator(".tile", { hasText: "Spindle vibration" })).toContainText("Alarm", { timeout: 150_000 });
+  await page.getByRole("button", { name: "Maintain Fettling CNC" }).click();
+  await expect(page.locator(".toast.ok").last()).toContainText("maintenance on Fettling CNC");
+  await expect(page.locator(".tile", { hasText: "Spindle vibration" })).not.toContainText("Alarm", { timeout: 180_000 });
 });

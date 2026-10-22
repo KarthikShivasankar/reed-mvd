@@ -9,13 +9,14 @@ import { Matches } from "./views/Matches";
 import { Opportunities } from "./views/Opportunities";
 import { Assistant } from "./views/Assistant";
 import { Factory } from "./views/Factory";
+import { DataSpace } from "./views/DataSpace";
 import { Audit, Catalogue, EdcCatalog, Matrix, Participants, Policies, Transfers } from "./views/DataViews";
 
 /* ------------------------------------------------------------------ routing
    The view lives in the URL hash (#/matches/R1) so views can be bookmarked,
    shared and navigated with the browser's back button. */
 export type View =
-  | "overview" | "marketplace" | "matches" | "opportunities" | "assistant"
+  | "overview" | "dataspace" | "marketplace" | "matches" | "opportunities" | "assistant"
   | "factory" | "catalogue" | "transfers" | "edc" | "audit" | "participants" | "policies" | "matrix";
 
 export interface Route { view: View; arg?: string }
@@ -53,6 +54,7 @@ export interface Ctx {
 type Group = "start" | "match" | "data" | "ref";
 const NAV: { id: View; label: string; group: Group; roles?: string[]; memberOnly?: boolean; connector?: boolean; factory?: boolean }[] = [
   { id: "overview", label: "Overview", group: "start" },
+  { id: "dataspace", label: "Data space", group: "start", memberOnly: true },
   { id: "marketplace", label: "Marketplace", group: "match", memberOnly: true },
   { id: "matches", label: "Matches", group: "match", roles: ["buyer", "quality-auditor", "admin"], memberOnly: true },
   { id: "opportunities", label: "Opportunities", group: "match", roles: ["supplier-engineer"], memberOnly: true },  // per supplier capability; the operator has none
@@ -124,6 +126,7 @@ export function App({ config, session }: { config: AppConfig; session: Session }
 
         <main className="main" id="main" key={view + (route.arg ?? "")}>
           {view === "overview" && <Overview ctx={ctx} />}
+          {view === "dataspace" && <DataSpace ctx={ctx} />}
           {view === "marketplace" && <Marketplace ctx={ctx} />}
           {view === "matches" && <Matches ctx={ctx} rfqId={route.arg} />}
           {view === "opportunities" && <Opportunities ctx={ctx} />}
@@ -141,7 +144,7 @@ export function App({ config, session }: { config: AppConfig; session: Session }
         <footer className="footer">
           <span>REED on Eclipse Dataspace Connector 0.17.0</span>
           <span>Identity: {config.identityMode === "dcp" ? "decentralized claims (verifiable credentials)" : "mock"}</span>
-          <span>Assistant: local Qwen3.8 via LiteLLM</span>
+          <span>Assistant: via LiteLLM (local Qwen3.8 by default)</span>
         </footer>
       </div>
     </ToastHost>
