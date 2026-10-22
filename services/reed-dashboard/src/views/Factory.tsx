@@ -165,7 +165,7 @@ export function Factory({ ctx }: { ctx: Ctx }) {
                   <span className="faint mono">{new Date(o.createdAt).toLocaleString()}{o.author ? ` · ${o.author}` : ""} · {o.source}</span>
                 </div>
                 <div className="obs-summary">{o.summary}</div>
-                {o.text !== o.summary && <div className="faint obs-text">“{o.text}”</div>}
+                {o.text && o.text !== o.summary && <div className="faint obs-text">“{o.text}”</div>}
               </li>
             ))}
           </ul>

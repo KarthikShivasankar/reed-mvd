@@ -51,11 +51,7 @@ public class PolicyController {
     public PolicyService.AssetAccess preview(@AuthenticationPrincipal Jwt jwt, @RequestParam String assetId,
                                              @RequestParam String discoverability, @RequestParam String policyTemplate) {
         var user = CurrentUser.of(jwt);
-        var p = policies.preview(assetId, discoverability, policyTemplate);
-        if (!user.canImpersonateView() && !p.ownerBpn().equals(user.bpn())) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "only the owner previews terms for its data");
-        }
-        return p;
+        return policies.preview(user.canImpersonateView() ? null : user.requireBpn(), assetId, discoverability, policyTemplate);
     }
 
     @GetMapping("/reed/policy/matrix")
@@ -72,6 +68,9 @@ public class PolicyController {
         var user = CurrentUser.of(jwt);
         if (user.bpn() == null || user.bpn().isBlank()) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "only the owner sets the terms of its data - the operator cannot");
+        }
+        if (!user.has("data-steward")) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "only your organisation's data steward sets the terms of its data");
         }
         return policies.change(user.bpn(), user.username(), assetId, change);
     }

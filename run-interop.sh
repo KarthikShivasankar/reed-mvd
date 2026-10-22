@@ -6,6 +6,7 @@
 #                  exactly what REED's policy evaluator predicts from its verifiable credentials
 #   2. contracts   for every company pair and every distinct contract policy it can see, one negotiation:
 #                  FINALIZED or TERMINATED exactly as predicted
+#   0. who may set terms: only the owner's data steward; someone else's asset answers like a missing one
 #   3. scenarios   cross-border stories (deployment/scenarios/interop.json): the owner sets an asset's terms
 #                  through REED (published to its own connector), companies ask, outcomes and refusal reasons
 #                  must match the story and REED's preview; payloads are pulled where the story says so.
@@ -23,6 +24,18 @@ conn_of() { jq -r --arg b "$1" '.participants[] | select(.bpn==$b) | .connector.
 owner_user() { jq -r --arg n "$1" '.participants[] | select(.connector.name==$n) | .users[0].username' "$ROSTER"; }
 ids() { jq -c '[.dataset // [] | (if type=="array" then . else [.] end)[] | ."@id"] | sort'; }
 offer_for() { jq -c --arg a "$1" '[.dataset // [] | (if type=="array" then . else [.] end)[] | select(."@id"==$a)][0].hasPolicy[0] // empty'; }
+
+log "0. who may set terms"
+BODY='{"discoverability":"consortium","policyTemplate":"consortium-only"}'
+api "$(token hanse-buyer)" PUT /reed/assets/process-capability-castellum/policy "$BODY" >/dev/null
+[[ $(status) == 404 ]] && pass "Hanse's data steward on Castellum's asset gets 404, like a missing one" || fail "hanse-buyer on castellum's asset: $(status)"
+api "$(token nordvind-quality)" PUT /reed/assets/bill-of-material-nordvind/policy "$BODY" >/dev/null
+[[ $(status) == 403 ]] && pass "an auditor of the owner (no data-steward role) cannot change its terms" || fail "nordvind-quality changed terms: $(status)"
+api "$ADMIN" PUT /reed/assets/bill-of-material-nordvind/policy "$BODY" >/dev/null
+[[ $(status) == 403 ]] && pass "the operator cannot change a company's terms" || fail "operator changed terms: $(status)"
+P1=$(api "$(token hanse-buyer)" GET "/reed/policy/preview?assetId=bill-of-material-nordvind&discoverability=consortium&policyTemplate=oem-only" >/dev/null; status)
+P2=$(api "$(token hanse-buyer)" GET "/reed/policy/preview?assetId=no-such-asset&discoverability=consortium&policyTemplate=oem-only" >/dev/null; status)
+[[ $P1 == 404 && $P2 == 404 ]] && pass "previews reveal nothing about other companies' assets (404 / 404)" || fail "preview oracle: $P1 vs $P2"
 
 if [[ -z ${SCENARIO:-} ]]; then
   MATRIX=$(api "$ADMIN" GET /reed/policy/matrix)

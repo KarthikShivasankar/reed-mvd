@@ -57,6 +57,11 @@ public class LlmClient {
         return model;
     }
 
+    /** The route stays on our own hardware (Ollama or vLLM); the frontier routes in litellm/config.yaml do not. */
+    public boolean local() {
+        return model.equals("reed-llm") || model.equals("reed-llm-vllm");  // ponytail: the two local aliases of litellm/config.yaml
+    }
+
     /**
      * One chat completion. {@code tools} and {@code jsonSchema} are optional.
      * Returns the assistant message ({@code content} and/or {@code tool_calls}).

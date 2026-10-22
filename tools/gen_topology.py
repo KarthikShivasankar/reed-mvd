@@ -502,6 +502,7 @@ realm = {
         {"name": "buyer", "description": "Posts RFQs, shortlists and confirms matches for its organisation"},
         {"name": "supplier-engineer", "description": "Answers matches and opportunities for its organisation"},
         {"name": "quality-auditor", "description": "Reads audit trail and gives delivery feedback"},
+        {"name": "data-steward", "description": "Sets the terms of its organisation's data (who finds it, who may sign)"},
         {"name": "admin", "description": "Dataspace operator (seeding, all views)"},
     ]},
     "clients": [

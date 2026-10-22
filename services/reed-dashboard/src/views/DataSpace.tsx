@@ -114,7 +114,8 @@ function Terms({ ctx, as, byBpn }: { ctx: Ctx; as: ConnectorRef; byBpn: Record<s
   const [preview, setPreview] = useState<AssetAccess | null>(null);
   const [flash, setFlash] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
-  const owner = !ctx.operator && ctx.session.bpn === as.bpn;
+  const owner = !ctx.operator && ctx.session.bpn === as.bpn && ctx.session.has("data-steward");
+  const ownOrg = !ctx.operator && ctx.session.bpn === as.bpn;
 
   const assets = access.data ?? [];
   const current = assets.find((a) => a.assetId === selected) ?? null;
@@ -234,7 +235,7 @@ function Terms({ ctx, as, byBpn }: { ctx: Ctx; as: ConnectorRef; byBpn: Record<s
                   {changed && <span className="note">Preview only: nothing changes until you publish.</span>}
                 </div>
               ) : (
-                <p className="note">Only {as.short} can change these terms - REED and the dataspace operator cannot.</p>
+                <p className="note">{ownOrg ? `Only ${as.short}'s data steward changes these terms.` : `Only ${as.short} can change these terms - REED and the dataspace operator cannot.`}</p>
               )}
               <p className="note">Contracts already signed keep the terms they were signed under; the next catalogue request and negotiation see the new ones.</p>
             </div>
@@ -389,7 +390,7 @@ function Stories({ ctx, as }: { ctx: Ctx; as: ConnectorRef }) {
 function Story({ ctx, as, s }: { ctx: Ctx; as: ConnectorRef; s: InteropScenario }) {
   const toast = useToast();
   const owner = ctx.config.connectors.find((c) => c.name === s.owner)!;
-  const isOwner = !ctx.operator && ctx.session.participant === s.owner;
+  const isOwner = !ctx.operator && ctx.session.participant === s.owner && ctx.session.has("data-steward");
   const [predicted, setPredicted] = useState<AssetAccess | null>(null);
   const [before, setBefore] = useState<{ discoverability: string; policyTemplate: string } | null>(null);
 

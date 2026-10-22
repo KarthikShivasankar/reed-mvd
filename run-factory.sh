@@ -82,8 +82,8 @@ api "$A" GET "/reed/factory?participant=wisla" >"$TMP/a"
 api "$A" POST /reed/factory/observations '{"text":"x"}' >/dev/null
 [[ $(status) == 403 ]] && pass "the operator cannot report on a company's line" || fail "operator posted: $(status)"
 api "$A" GET "/reed/factory/observations?participant=castellum" >"$TMP/ao"
-jq -e 'length > 0 and all(.[]; .author == null) and (map(.text) | join(" ") | test("612") | not)' "$TMP/ao" >/dev/null \
-  && pass "the operator sees operators' notes redacted and without author" || fail "operator sees: $(head -c 300 "$TMP/ao")"
+jq -e 'length > 0 and all(.[]; .author == null and .text == null and (.summary | length > 0))' "$TMP/ao" >/dev/null \
+  && pass "the operator sees operators' notes as summaries only: no free text, no author" || fail "operator sees: $(head -c 300 "$TMP/ao")"
 api "$C" GET /reed/factory/observations | jq -e '.[0].author == "castellum-engineer"' >/dev/null \
   && pass "the company itself sees its notes in full" || fail "castellum's own view lacks the author"
 api "$A" POST /reed/factory/control '{"action":"maintain","machineId":"furnace-1"}' >/dev/null

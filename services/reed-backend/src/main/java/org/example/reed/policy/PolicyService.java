@@ -126,9 +126,9 @@ public class PolicyService {
         return new Inbound(claims, offers);
     }
 
-    /** What would happen under other terms, without publishing anything. */
-    public AssetAccess preview(String assetId, String discoverability, String template) {
-        var a = asset(assetId);
+    /** What would happen under other terms, without publishing anything. {@code viewerBpn} null: the operator. */
+    public AssetAccess preview(String viewerBpn, String assetId, String discoverability, String template) {
+        var a = asset(assetId, viewerBpn);
         return evaluate(a, discoverability(discoverability), template(template), requesters(), claims(), names());
     }
 
@@ -148,10 +148,7 @@ public class PolicyService {
      */
     @Transactional
     public AssetAccess change(String actorBpn, String username, String assetId, Change c) {
-        var a = asset(assetId);
-        if (!a.ownerBpn.equals(actorBpn)) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "only the owner sets the terms of its data");
-        }
+        var a = asset(assetId, actorBpn);
         var d = discoverability(c.discoverability());
         var t = template(c.policyTemplate());
         var before = a.discoverability + "/" + a.policyTemplate;
@@ -241,9 +238,13 @@ public class PolicyService {
                 : Arrays.stream(delimited.split(",")).filter(s -> !s.isBlank()).collect(Collectors.toSet());
     }
 
-    private Asset asset(String assetId) {
-        return assets.findById(assetId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "unknown asset " + assetId));
+    /**
+     * The asset if {@code ownerBpn} owns it ({@code null}: the operator, any asset). Someone else's asset answers
+     * exactly like a missing one, so these endpoints never reveal which assets exist.
+     */
+    private Asset asset(String assetId, String ownerBpn) {
+        return assets.findById(assetId).filter(a -> ownerBpn == null || a.ownerBpn.equals(ownerBpn))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "you own no asset " + assetId));
     }
 
     private static Discoverability discoverability(String d) {

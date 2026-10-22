@@ -18,7 +18,7 @@
       "attestations": ["ISO9001", "ISO14001"],
       "assets": ["PartDigitalTwin", "BillOfMaterial", "DigitalProductPassport", "FixtureHandlingStrategy", "ProductionStatus", "QualityEvidence", "SimulationResult"],
       "users": [
-        { "username": "nordvind-buyer", "roles": ["buyer"] },
+        { "username": "nordvind-buyer", "roles": ["buyer", "data-steward"] },
         { "username": "nordvind-quality", "roles": ["quality-auditor"] }
       ]
     },
@@ -34,7 +34,7 @@
       "attestations": ["ISO9001", "DNV"],
       "assets": ["PartDigitalTwin", "BillOfMaterial", "DigitalProductPassport", "QualityEvidence"],
       "users": [
-        { "username": "hanse-buyer", "roles": ["buyer"] }
+        { "username": "hanse-buyer", "roles": ["buyer", "data-steward"] }
       ]
     },
     {
@@ -75,7 +75,7 @@
         { "buyer": "BPN-REED-OEM-0001", "onTime": true, "qualityOk": true },
         { "buyer": "BPN-REED-OEM-0002", "onTime": false, "qualityOk": true }
       ],
-      "users": [{ "username": "castellum-engineer", "roles": ["supplier-engineer"] }],
+      "users": [{ "username": "castellum-engineer", "roles": ["supplier-engineer", "data-steward"] }],
       "factory": {
         "name": "Bilbao demo casting line (simulated)",
         "machines": [
@@ -137,7 +137,7 @@
         { "buyer": "BPN-REED-OEM-0002", "onTime": true, "qualityOk": true },
         { "buyer": "BPN-REED-OEM-0002", "onTime": true, "qualityOk": true }
       ],
-      "users": [{ "username": "wisla-engineer", "roles": ["supplier-engineer"] }],
+      "users": [{ "username": "wisla-engineer", "roles": ["supplier-engineer", "data-steward"] }],
       "factory": {
         "name": "Gdańsk demo machining cell (simulated)",
         "machines": [
@@ -183,7 +183,7 @@
         "leadTimeWeeks": 3
       },
       "assets": ["ProcessCapability"],
-      "users": [{ "username": "maasvlakte-engineer", "roles": ["supplier-engineer"] }]
+      "users": [{ "username": "maasvlakte-engineer", "roles": ["supplier-engineer", "data-steward"] }]
     },
     {
       "bpn": "BPN-REED-SUP-0005",
@@ -213,7 +213,7 @@
         "leadTimeWeeks": 2
       },
       "assets": ["ProcessCapability", "QualityEvidence"],
-      "users": [{ "username": "rhein-auditor", "roles": ["quality-auditor", "supplier-engineer"] }]
+      "users": [{ "username": "rhein-auditor", "roles": ["quality-auditor", "supplier-engineer", "data-steward"] }]
     },
     {
       "bpn": "BPN-REED-SUP-0006",
@@ -403,7 +403,7 @@
       "connector": { "name": "komatsu", "portPrefix": "45" },
       "attestations": [],
       "assets": ["PartDigitalTwin", "BillOfMaterial"],
-      "users": [{ "username": "komatsu-buyer", "roles": ["buyer"] }]
+      "users": [{ "username": "komatsu-buyer", "roles": ["buyer", "data-steward"] }]
     },
     {
       "bpn": "BPN-REED-OPERATOR",

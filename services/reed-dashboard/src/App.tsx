@@ -155,7 +155,7 @@ export function App({ config, session }: { config: AppConfig; session: Session }
 function OrgBadge({ ctx }: { ctx: Ctx }) {
   const [open, setOpen] = useState(false);
   const org = ctx.me.organisation;
-  const role = ctx.session.roles.filter((r) => ["buyer", "supplier-engineer", "quality-auditor", "admin"].includes(r));
+  const role = ctx.session.roles.filter((r) => ["buyer", "supplier-engineer", "quality-auditor", "data-steward", "admin"].includes(r));
   return (
     <div className="org">
       <button className="org-btn" onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-haspopup="dialog">

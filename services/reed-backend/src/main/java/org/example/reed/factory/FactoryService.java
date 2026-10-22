@@ -50,6 +50,7 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArraySet;
@@ -99,13 +100,14 @@ public class FactoryService implements MqttCallback {
 
     /**
      * An observation as one viewer may see it: the company's own people get the original text and author;
-     * viewers outside the company (the dataspace operator) get the text with personal data removed, no author.
+     * viewers outside the company (the dataspace operator) get machine, category, severity and the one-line summary
+     * (as published on MQTT) - no free text, which may name colleagues the redactor does not know - and no author.
      */
     public record ObservationView(Long id, String participant, String machineId, String category, String severity,
                                   String text, String summary, String source, String author, Instant createdAt) {
         static ObservationView of(Observation o, boolean own) {
             return new ObservationView(o.id, o.participant, o.machineId, o.category, o.severity,
-                    own ? o.text : o.redactedText, o.summary, o.source, own ? o.author : null, o.createdAt);
+                    own ? o.text : null, o.summary, o.source, own ? o.author : null, o.createdAt);
         }
     }
 
@@ -460,7 +462,8 @@ public class FactoryService implements MqttCallback {
                         low = for information) and a one-line summary of at most 20 words.
 
                         Observation: """ + redacted.text()));
-        var out = llm.chat(messages, null, schema).flatMap(llm::json);
+        // Free shop-floor text can name colleagues the redactor does not know: only a local model tags it.
+        var out = llm.local() ? llm.chat(messages, null, schema).flatMap(llm::json) : Optional.<JsonNode>empty();
         if (out.isPresent()) {
             var j = out.get();
             var m = j.path("machineId").asText();
@@ -481,7 +484,7 @@ public class FactoryService implements MqttCallback {
             tag = new ObservationTagger.Tag(machineId, tag.category(), tag.severity(), tag.summary());  // the operator's choice wins
         }
         var o = observations.save(new Observation(participant, tag.machineId(), tag.category(), tag.severity(), text,
-                redacted.text(), tag.summary(), source, author));
+                tag.summary(), source, author));
         audit.save(new AuditEvent(EventType.ASSIST, actorBpn, null, "observation " + o.id + " on " + participant + " tagged via "
                 + source + ("llm".equals(source) ? " (" + llm.model() + ")" : "") + ", " + redacted.redactions() + " redaction(s)"));
         publish(participant, "observations", Map.of("id", o.id, "machineId", o.machineId == null ? "" : o.machineId,

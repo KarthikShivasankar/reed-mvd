@@ -67,7 +67,7 @@ has a collapsible "What this view is for" explainer; this guide follows a full m
 | View | buyer | supplier-engineer | quality-auditor | admin |
 |---|---|---|---|---|
 | Overview, Marketplace, Assistant, Catalogue, EDC catalog, Audit, Members, Policies, Matrix | ✓ | ✓ | ✓ | ✓ |
-| Data space (own terms: change; others: look) | ✓ | ✓ | ✓ | look as any company |
+| Data space (own terms: change with `data-steward`; others: look) | ✓ | ✓ | ✓ | look as any company |
 | Factory (own line; controls + notes) | if the organisation runs a line | same | same | any line, read-only |
 | Matches (full ranking of own RFQs) | ✓ | own row via link | own organisation | all |
 | Opportunities | | ✓ | | ✓ |

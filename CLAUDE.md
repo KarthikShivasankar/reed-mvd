@@ -76,8 +76,9 @@ Spring Boot 3.3 + Postgres, schema by **Flyway** (`db/migration`, Hibernate `val
   explanations with numbers not from the scorer are discarded).
 - `policy/`: `PolicyEvaluator` (pure mirror of the CEL rules over the `vc_*` claims, unit-tested),
   `PolicyService` (who gets each asset and why, what-if preview, what a requester can discover - never
-  assets it may not discover -, owner-only term changes published to the owner's connector: POST, PUT on
-  409; `POLICY` audit). The connectors stay the authority; `run-interop.sh` fails if they disagree.
+  assets it may not discover -, owner-only term changes - realm role `data-steward` of the owning
+  organisation; other companies' assets answer 404 like missing ones - published to the owner's connector: POST,
+  PUT on 409; `POLICY` audit). The connectors stay the authority; `run-interop.sh` fails if they disagree.
 - `edc/`: `EdcRenderService` renders per-owner assets, access policies (per discoverability) and
   contract policies (template credential constraints) + CEL expressions; `ConnectorClient` calls
   Management APIs with per-connector keys.
@@ -151,7 +152,8 @@ Spring Boot 3.3 + Postgres, schema by **Flyway** (`db/migration`, Hibernate `val
   the model may raise severity, never lower it below the `ObservationTagger` rules), fallback rules. Published on
   `reed/factory/<c>/observations` without author or personal data; the original text stays in the company's view.
 - Scoping: a user sees only their own company's line (`participant` claim); the operator reads any line
-  (`?participant=`) - operators' notes redacted (`redacted_text`), no author - but cannot post observations or steer.
+  (`?participant=`) - operators' notes as summary only (no free text, no author) - but cannot post observations or steer.
+  Notes are LLM-tagged only on a local route (`LlmClient.local()`); frontier routes fall back to the rules.
 - Toy factory: `POST /reed/factory/control {action: drift|spike|maintain}` (own company only) publishes on
   `reed/factory/<c>/control`; the simulator applies it (drift: past the limit in ~5 min, spike: at once,
   maintain: faults cleared + wear reset for the cycle). ACL: devices write only `<c>/+/+` and `<c>/+/+/history`

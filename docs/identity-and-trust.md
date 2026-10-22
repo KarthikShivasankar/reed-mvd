@@ -62,7 +62,9 @@ credentials) from **who a person is** (proved to the REED backend with a Keycloa
 ### Owners set their terms
 
 `PUT /reed/assets/{assetId}/policy {discoverability, policyTemplate}` is accepted only from a user of the
-owning organisation (not the operator). REED stores the terms and publishes them to the owner's own
+owning organisation holding the realm role `data-steward` (not its auditors, not the operator). Someone else's
+asset answers 404 exactly like a missing one, here and in `/reed/policy/preview`, so neither reveals which
+assets exist. REED stores the terms and publishes them to the owner's own
 connector at once (access + contract policy definitions, the asset's `reed:odrl`, the contract definition;
 POST, PUT on 409) and audits a `POLICY` event. Agreements already signed keep their terms; the next
 catalogue request and negotiation see the new ones. `seed-reed.sh` upserts the same way, so changed CEL

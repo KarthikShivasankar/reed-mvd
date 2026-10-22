@@ -24,6 +24,10 @@
         "description": "Reads audit trail and gives delivery feedback"
       },
       {
+        "name": "data-steward",
+        "description": "Sets the terms of its organisation's data (who finds it, who may sign)"
+      },
+      {
         "name": "admin",
         "description": "Dataspace operator (seeding, all views)"
       }
@@ -198,7 +202,8 @@
         }
       ],
       "realmRoles": [
-        "buyer"
+        "buyer",
+        "data-steward"
       ],
       "requiredActions": []
     },
@@ -252,7 +257,8 @@
         }
       ],
       "realmRoles": [
-        "buyer"
+        "buyer",
+        "data-steward"
       ],
       "requiredActions": []
     },
@@ -279,7 +285,8 @@
         }
       ],
       "realmRoles": [
-        "supplier-engineer"
+        "supplier-engineer",
+        "data-steward"
       ],
       "requiredActions": []
     },
@@ -306,7 +313,8 @@
         }
       ],
       "realmRoles": [
-        "supplier-engineer"
+        "supplier-engineer",
+        "data-steward"
       ],
       "requiredActions": []
     },
@@ -333,7 +341,8 @@
         }
       ],
       "realmRoles": [
-        "supplier-engineer"
+        "supplier-engineer",
+        "data-steward"
       ],
       "requiredActions": []
     },
@@ -361,7 +370,8 @@
       ],
       "realmRoles": [
         "quality-auditor",
-        "supplier-engineer"
+        "supplier-engineer",
+        "data-steward"
       ],
       "requiredActions": []
     },
@@ -388,7 +398,8 @@
         }
       ],
       "realmRoles": [
-        "buyer"
+        "buyer",
+        "data-steward"
       ],
       "requiredActions": []
     },

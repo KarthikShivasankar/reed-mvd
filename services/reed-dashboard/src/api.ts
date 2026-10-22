@@ -115,10 +115,11 @@ export interface Observation {
   machineId: string | null;
   category: string;
   severity: "low" | "medium" | "high";
-  text: string;
+  /** null for viewers outside the company (the operator): they get the summary only */
+  text: string | null;
   summary: string;
   source: string;
-  author: string;
+  author: string | null;
   createdAt: string;
 }
 

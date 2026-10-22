@@ -13,7 +13,7 @@ only after a contract** - and every connector proves who it is with **verifiable
 |---|---|
 | **Connectors** | 7 EDC `0.17.0` connectors (control + data plane, Postgres-backed stores), one per company, plus a federated catalog |
 | **Identity for organisations** | Decentralized Claims Protocol (DCP): **one IdentityHub per company**, a REED Issuer Service, `did:web`, Membership / Certification / SupplierRelation credentials. EDC policies are CEL rules over those credentials. Secrets in a persistent Vault, each company confined to its own folder |
-| **Identity for people** | Keycloak (OIDC, PKCE): roles `buyer`, `supplier-engineer`, `quality-auditor`, `admin`; the token carries the user's organisation |
+| **Identity for people** | Keycloak (OIDC, PKCE): roles `buyer`, `supplier-engineer`, `quality-auditor`, `data-steward` (sets its organisation's data terms), `admin`; the token carries the user's organisation |
 | **Matchmaking** | Hard filters + six weighted criteria (lead time, tolerance margin, logistics for bulky parts, track record, sector, embedded CO2 for CBAM) with per-criterion explanations, partner recommendations and a contract-backed match lifecycle |
 | **Sovereign terms** | Each owner sets, per asset, who finds it and who may sign - role, registered seat (EU / EEA), certification, supply relation, shared project - and publishes it to its own connector from the **Data space** view; nobody else (not the operator) can change it. REED predicts who gets what; `run-interop.sh` checks every connector pair agrees |
 | **Shop floor** | Each company's (simulated) line publishes sensors over MQTT; REED analyses trends every minute, tags operators' notes with the LLM, briefs the shift. A "toy factory": inject a fault or maintain a machine from the dashboard and watch the alarm arise and clear. A supplier's live line state reaches a customer only inside its production-status payload, under contract |
@@ -152,7 +152,9 @@ docker compose -f deployment/docker-compose.yml up -d litellm reed-backend
 
 Routes live in `deployment/litellm/config.yaml`; a frontier route falls back to the local model if it
 fails. Whatever the route, REED sends organisation and part data only (personal data is redacted
-first), and every number in an answer must come from REED's own data or the answer is discarded.
+first), and every number in an answer must come from REED's own data or the answer is discarded. Operators' free-text
+shop-floor notes (which may name colleagues) are tagged by a local model only; on a frontier route they are
+tagged by rules.
 
 ## Repository layout
 
