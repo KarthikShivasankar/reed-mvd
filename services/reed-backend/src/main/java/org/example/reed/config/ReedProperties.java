@@ -18,7 +18,7 @@ public class ReedProperties {
     private String deploymentDir = "/app/deployment";
 
     /** In-cluster base URL of this backend (used in rendered EDC data addresses). */
-    private String internalUrl = "https://reed-backend:8080";
+    private String internalUrl = "http://reed-backend:8080";
 
     /** {@code mock} (iam-mock, permissive EDC policies) or {@code dcp} (credential-constrained policies). */
     private String identityMode = "dcp";

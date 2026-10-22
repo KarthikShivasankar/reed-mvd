@@ -3,10 +3,9 @@ storage "file" {
   path = "/vault/file"
 }
 listener "tcp" {
-  address       = "0.0.0.0:8200"
-  tls_cert_file = "/tls/vault.crt"
-  tls_key_file  = "/tls/vault.key"
+  address     = "0.0.0.0:8200"
+  tls_disable = 1
 }
-api_addr      = "https://vault:8200"
+api_addr      = "http://vault:8200"
 disable_mlock = true
 ui            = false

@@ -86,7 +86,7 @@ public class AssistantController {
      * text before it reaches the model. Given/family names alone are not used: as single words they
      * collide with ordinary vocabulary and company names.
      */
-    private static List<String> personNames(Jwt jwt) {
+    public static List<String> personNames(Jwt jwt) {
         var out = new ArrayList<String>();
         for (var claim : List.of("name", "preferred_username", "email")) {
             var v = jwt.getClaimAsString(claim);

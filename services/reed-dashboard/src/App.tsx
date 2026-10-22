@@ -8,6 +8,7 @@ import { Marketplace } from "./views/Marketplace";
 import { Matches } from "./views/Matches";
 import { Opportunities } from "./views/Opportunities";
 import { Assistant } from "./views/Assistant";
+import { Factory } from "./views/Factory";
 import { Audit, Catalogue, EdcCatalog, Matrix, Participants, Policies, Transfers } from "./views/DataViews";
 
 /* ------------------------------------------------------------------ routing
@@ -15,7 +16,7 @@ import { Audit, Catalogue, EdcCatalog, Matrix, Participants, Policies, Transfers
    shared and navigated with the browser's back button. */
 export type View =
   | "overview" | "marketplace" | "matches" | "opportunities" | "assistant"
-  | "catalogue" | "transfers" | "edc" | "audit" | "participants" | "policies" | "matrix";
+  | "factory" | "catalogue" | "transfers" | "edc" | "audit" | "participants" | "policies" | "matrix";
 
 export interface Route { view: View; arg?: string }
 
@@ -50,12 +51,13 @@ export interface Ctx {
 }
 
 type Group = "start" | "match" | "data" | "ref";
-const NAV: { id: View; label: string; group: Group; roles?: string[]; memberOnly?: boolean; connector?: boolean }[] = [
+const NAV: { id: View; label: string; group: Group; roles?: string[]; memberOnly?: boolean; connector?: boolean; factory?: boolean }[] = [
   { id: "overview", label: "Overview", group: "start" },
   { id: "marketplace", label: "Marketplace", group: "match", memberOnly: true },
   { id: "matches", label: "Matches", group: "match", roles: ["buyer", "quality-auditor", "admin"], memberOnly: true },
-  { id: "opportunities", label: "Opportunities", group: "match", roles: ["supplier-engineer", "admin"], memberOnly: true },
+  { id: "opportunities", label: "Opportunities", group: "match", roles: ["supplier-engineer"], memberOnly: true },  // per supplier capability; the operator has none
   { id: "assistant", label: "Assistant", group: "match", memberOnly: true },
+  { id: "factory", label: "Factory", group: "data", factory: true },
   { id: "catalogue", label: "Catalogue", group: "data", memberOnly: true },
   { id: "transfers", label: "Contracts", group: "data", connector: true },
   { id: "edc", label: "EDC catalog", group: "data", memberOnly: true },
@@ -92,7 +94,9 @@ export function App({ config, session }: { config: AppConfig; session: Session }
   const ctx: Ctx = { api, config, session, me: me.data, member, operator };
   // Membership and a connector decide what may be opened; roles only decide what the nav offers,
   // so a shared link (e.g. a supplier opening #/matches/R1) still lands on an explanatory page.
-  const allowed = NAV.filter((n) => (!n.memberOnly || member) && (!n.connector || !!session.participant || operator));
+  const hasFactory = config.connectors.some((c) => c.factory && c.name === session.participant);
+  const allowed = NAV.filter((n) => (!n.memberOnly || member) && (!n.connector || !!session.participant || operator)
+    && (!n.factory || hasFactory || operator));
   const visible = allowed.filter((n) => !n.roles || n.roles.some((r) => session.has(r)));
   const view = allowed.some((n) => n.id === route.view) ? route.view : "overview";
 
@@ -123,6 +127,7 @@ export function App({ config, session }: { config: AppConfig; session: Session }
           {view === "marketplace" && <Marketplace ctx={ctx} />}
           {view === "matches" && <Matches ctx={ctx} rfqId={route.arg} />}
           {view === "opportunities" && <Opportunities ctx={ctx} />}
+          {view === "factory" && <Factory ctx={ctx} />}
           {view === "assistant" && <Assistant ctx={ctx} />}
           {view === "catalogue" && <Catalogue ctx={ctx} />}
           {view === "transfers" && <Transfers ctx={ctx} />}

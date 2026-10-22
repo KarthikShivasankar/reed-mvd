@@ -20,7 +20,7 @@ only after a contract** - and every connector proves who it is with **verifiable
 
 > State survives restarts: Vault (file storage, auto-unsealed), every connector, IdentityHub,
 > the issuer, Keycloak and the REED registry persist in Postgres - `run-persistence.sh` proves it.
-> Every connection is TLS (local REED CA). Remaining gaps are listed under [Production gaps](#production-gaps).
+> Remaining gaps (mainly TLS) are listed under [Production gaps](#production-gaps).
 
 ## Topology
 
@@ -89,20 +89,11 @@ docker compose -f deployment/docker-compose.yml up --build -d
 ./run-transfer.sh        # DCP contract + EDR pull, and two credential-based refusals
 ./run-matchmaking.sh     # all 11 scenarios, full lifecycle where both sides run a connector
 ./run-persistence.sh     # full stop/start without wiping volumes: nothing needs re-seeding
+./run-factory.sh         # shop floor: sensors over MQTT -> REED -> live dashboard, observations, briefing
 (cd services/reed-dashboard && npm ci && npx playwright install chromium && npx playwright test)
 ```
 
-Every endpoint speaks **TLS** with certificates from a local REED CA that the generator creates
-(`deployment/tls/ca.crt`). Trust it once so the browser accepts the dashboard, Keycloak and backend:
-
-```bash
-# Chrome/Chromium (Linux): Settings → Privacy and security → Security → Manage certificates →
-# Authorities → Import deployment/tls/ca.crt (trust for websites). Firefox: same under Certificates.
-# Or system-wide (Debian/Ubuntu):
-sudo cp deployment/tls/ca.crt /usr/local/share/ca-certificates/reed-ca.crt && sudo update-ca-certificates
-```
-
-Open **https://localhost:8088** and log in (password for every demo user: `reed-demo`):
+Open **http://127.0.0.1:8088** (an IP, so a browser that once saw HSTS for `localhost` does not force https) and log in (password for every demo user: `reed-demo`):
 
 | User | Organisation | Try this |
 |---|---|---|
@@ -173,8 +164,7 @@ docs/                               architecture, identity, matchmaking, data mo
 
 ## Production gaps
 
-What is production-style today: TLS on every connection (local CA; Postgres `verify-full`, `did:web`
-over https, credential status lists over https), per-company IdentityHubs and Vault folders, persistent Vault and
+What is production-style today: per-company IdentityHubs and Vault folders, persistent Vault and
 stores, Keycloak in production mode on Postgres, generated secrets (`deployment/.env`), admin APIs
 and databases bound to localhost, key-protected Management APIs behind a user-scoped relay,
 credential-based EDC policies, Management API v4 with EDRs delivered by callback, each company
@@ -183,10 +173,8 @@ and an audit trail naming who received each payload.
 
 Deliberate remaining shortcuts, each marked `ponytail:` in code where it lives:
 
-- **Local CA.** `tools/gen_topology.py` creates a CA and one certificate per service; the CA key sits
-  next to the deployment (`deployment/tls-ca.key`). Production: certificates from each organisation's
-  PKI or ACME. Ollama on the host is reached over plain http (it has no TLS of its own) - put it
-  behind a TLS proxy, or use the vLLM profile, which serves TLS.
+- **No TLS.** Everything is plain http on one host (`did:web` resolution included). Production:
+  certificates on every endpoint (`edc.iam.did.web.use.https=true`), Keycloak `KC_HTTPS_*`.
 - **Vault unseal key and token ids**: the root token is revoked right after bootstrap (no root token
   exists afterwards), but the unseal key stays in a local volume - removing it needs auto-unseal
   against an external KMS/HSM. Tokens use fixed ids from `.env` (Vault hashes those with SHA-1).

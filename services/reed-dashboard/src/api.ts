@@ -71,6 +71,59 @@ export interface Participant {
   capability: Capability | null;
 }
 
+/* ---- shop floor ---- */
+export type SensorStatus = "OK" | "WATCH" | "WARNING" | "ALARM";
+
+export interface SensorView {
+  key: string;
+  id: string;
+  name: string;
+  unit: string;
+  lo: number | null;
+  hi: number | null;
+  ts: number | null;
+  value: number | null;
+  status: SensorStatus | null;
+}
+
+export interface FactoryLine {
+  participant: string;
+  name: string;
+  brokerConnected: boolean;
+  machines: { id: string; name: string; sensors: SensorView[] }[];
+}
+
+export interface SeriesPoint { t: number; avg: number; min: number; max: number }
+
+export interface Insight {
+  sensorKey: string;
+  machineId: string;
+  machine: string;
+  sensor: string;
+  unit: string;
+  latest: number | null;
+  slopePerHour: number | null;
+  hoursToLimit: number | null;
+  status: SensorStatus;
+  finding: string;
+  action: string | null;
+}
+
+export interface Observation {
+  id: number;
+  participant: string;
+  machineId: string | null;
+  category: string;
+  severity: "low" | "medium" | "high";
+  text: string;
+  summary: string;
+  source: string;
+  author: string;
+  createdAt: string;
+}
+
+export interface Briefing { headline: string; actions: string[]; source: string; model: string | null }
+
 export interface Me {
   username: string;
   roles: string[];
@@ -226,6 +279,12 @@ const MGMT_CONTEXT = ["https://w3id.org/edc/connector/management/v2"];
 const QUERY = { "@context": MGMT_CONTEXT, "@type": "QuerySpec", offset: 0, limit: 50 };
 const DSP = "dataspace-protocol-http:2025-1";
 
+/** Query string from the defined values only. */
+const q = (params: Record<string, string | undefined>) => {
+  const p = Object.entries(params).filter((e): e is [string, string] => !!e[1]);
+  return p.length ? "?" + new URLSearchParams(p).toString() : "";
+};
+
 /** Encodes one URL path segment, so ids from links (URL hash) can never steer a request to another endpoint. */
 const seg = (v: string | number) => encodeURIComponent(String(v));
 
@@ -271,6 +330,41 @@ export class Api {
     return this.call<AssetMetadata[]>("GET", `/reed/catalogue${bpn ? `?bpn=${encodeURIComponent(bpn)}` : ""}`);
   }
   audit() { return this.call<AuditEvent[]>("GET", "/reed/audit"); }
+
+  /* ---- shop floor (participant: only the operator picks another company's line) ---- */
+  factory(participant?: string) { return this.call<FactoryLine>("GET", `/reed/factory${q({ participant })}`); }
+  factorySeries(key: string, range: string, participant?: string) {
+    return this.call<SeriesPoint[]>("GET", `/reed/factory/series${q({ participant, key, range })}`);
+  }
+  factoryInsights(participant?: string) { return this.call<Insight[]>("GET", `/reed/factory/insights${q({ participant })}`); }
+  observations(participant?: string) { return this.call<Observation[]>("GET", `/reed/factory/observations${q({ participant })}`); }
+  observe(text: string, machineId?: string) { return this.call<Observation>("POST", "/reed/factory/observations", { text, machineId }); }
+  briefing(participant?: string) { return this.call<Briefing>("GET", `/reed/factory/briefing${q({ participant })}`); }
+  /** Live shop-floor events. Server-sent events read with fetch, so the bearer token travels in a header. */
+  async factoryStream(participant: string | undefined, onEvent: (event: string, data: any) => void, signal: AbortSignal) {
+    const res = await fetch(`${this.cfg.reedBackendUrl}/reed/factory/stream${q({ participant })}`, {
+      headers: { Authorization: `Bearer ${await this.session.token()}`, Accept: "text/event-stream" },
+      signal,
+    });
+    if (!res.ok || !res.body) throw new ApiError(res.status, `live stream answered ${res.status}`);
+    const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+    let buf = "";
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) return;
+      buf += value;
+      for (let i = buf.indexOf("\n\n"); i >= 0; i = buf.indexOf("\n\n")) {
+        let event = "message";
+        let data = "";
+        for (const line of buf.slice(0, i).split("\n")) {
+          if (line.startsWith("event:")) event = line.slice(6).trim();
+          else if (line.startsWith("data:")) data += line.slice(5);
+        }
+        buf = buf.slice(i + 2);
+        if (data) onEvent(event, JSON.parse(data));
+      }
+    }
+  }
   scenarios() { return this.call<ScenarioFile>("GET", "/reed/scenarios"); }
 
   /* ---- matchmaking ---- */
@@ -326,8 +420,15 @@ export class Api {
   list(consumer: string, kind: "contractnegotiations" | "transferprocesses") {
     return this.mgmt<any[]>(consumer, "POST", `/v4/${kind}/request`, QUERY).then((j) => (Array.isArray(j) ? j : [j]));
   }
+  /** EDR endpoints name the connector's published port; the browser reaches it through this origin (nginx /dp/). */
+  private viaOrigin(endpoint: string): string {
+    const c = this.cfg.connectors.find((c) => endpoint.startsWith(c.publicUrl));
+    if (!c) return endpoint;
+    const u = new URL(c.publicUrl);
+    return `${window.location.origin}/dp/${c.name}:${u.port}${u.pathname}${endpoint.slice(c.publicUrl.length)}`;
+  }
   async pull(endpoint: string, authorization: string): Promise<string> {
-    const res = await fetch(endpoint, { headers: { Authorization: authorization } });
+    const res = await fetch(this.viaOrigin(endpoint), { headers: { Authorization: authorization } });
     const text = await res.text();
     if (!res.ok) throw new Error(`data plane answered ${res.status}: ${text.slice(0, 200)}`);
     return text;

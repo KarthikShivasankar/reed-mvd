@@ -391,7 +391,7 @@ public class AssistantService {
     }
 
     /** True if every decimal number in the model output also occurs in the scorer output it was given. */
-    static boolean numbersGrounded(String output, String input) {
+    public static boolean numbersGrounded(String output, String input) {
         var m = NUMBER.matcher(output);
         while (m.find()) {
             var n = m.group();

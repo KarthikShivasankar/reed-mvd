@@ -64,10 +64,10 @@ public class Participant {
     /** Docker service name of the participant's EDC connector, or null (directory-only member). */
     public String connectorName;
 
-    /** In-cluster DSP address of the connector, e.g. https://castellum:29194/protocol/2025-1. */
+    /** In-cluster DSP address of the connector, e.g. http://castellum:29194/protocol/2025-1. */
     public String dspUrl;
 
-    /** In-cluster Management API base, e.g. https://castellum:29193/management. */
+    /** In-cluster Management API base, e.g. http://castellum:29193/management. */
     public String managementUrl;
 
     /** The participant's decentralized identifier (also its EDC participant id under DCP). */

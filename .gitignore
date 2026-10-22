@@ -87,5 +87,3 @@ deployment/payloads/
 # Python
 __pycache__/
 *.pyc
-deployment/tls/
-deployment/tls-ca.*

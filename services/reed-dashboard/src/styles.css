@@ -761,3 +761,71 @@ textarea.field { font-family: var(--sans); font-size: 13px; resize: vertical; wi
 .near-miss-note { margin-top: 12px; }
 .near-miss-note summary { cursor: pointer; color: var(--text-dim); font-size: 13px; }
 .notice { color: var(--text-dim); background: var(--panel); border: 1px dashed var(--line-bright); border-radius: var(--radius); padding: 12px 14px; margin-bottom: 14px; }
+
+/* ----------------------------- factory (shop floor) --------------------- */
+/* Status: fixed scale, always icon + word; alarm is a solid chip so it never relies on hue alone. */
+.st { display: inline-flex; align-items: center; gap: 5px; font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.5px;
+  padding: 2px 7px; border-radius: var(--radius); border: 1px solid var(--line-bright); color: var(--text-dim); white-space: nowrap; }
+.st-OK { color: var(--cyan); border-color: var(--cyan-dim); }
+.st-WATCH { color: var(--amber); border-color: var(--amber-dim); }
+.st-WARNING { color: var(--orange); border-color: var(--orange); border-width: 2px; }
+.st-ALARM { color: #160404; background: var(--red); border-color: var(--red); font-weight: 600; }
+.st-none { color: var(--text-faint); }
+
+.factory-top { display: grid; grid-template-columns: 3fr 2fr; gap: 14px; align-items: start; }
+.factory-top .panel + .panel { margin-top: 0; }
+.attention { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.att { display: grid; grid-template-columns: 92px 1fr; gap: 10px; align-items: start; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+.att:last-child { border-bottom: none; padding-bottom: 0; }
+.briefing-head { font-family: var(--display); font-size: 15px; margin: 0 0 8px; }
+.briefing { margin: 0 0 8px; padding-left: 20px; display: grid; gap: 6px; }
+
+.machines { display: grid; gap: 14px; margin: 14px 0; }
+.machine h3 { font-family: var(--display); font-size: 13px; letter-spacing: 1px; text-transform: uppercase; color: var(--text-dim); margin: 0 0 8px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.tile { text-align: left; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px;
+  color: var(--text); cursor: pointer; display: grid; gap: 4px; font: inherit; }
+.tile:hover { border-color: var(--line-bright); }
+.tile.active { border-color: var(--violet); box-shadow: inset 0 0 0 1px var(--violet); }
+.tile-head { display: flex; justify-content: space-between; gap: 8px; font-size: 12.5px; color: var(--text-dim); }
+.tile-value .num { font-family: var(--mono); font-size: 24px; font-weight: 500; }
+.tile-value .unit { color: var(--text-dim); font-size: 12px; }
+.tile-foot { font-size: 11px; font-family: var(--mono); }
+.spark { width: 100%; height: 34px; display: block; }
+.spark .series, .chart .series { fill: none; stroke: var(--violet); stroke-width: 2px; stroke-linejoin: round; }
+.spark .limit, .chart .limit { stroke: var(--text-faint); stroke-width: 1px; stroke-dasharray: 4 4; }
+
+.chart { position: relative; }
+.chart svg { width: 100%; height: auto; display: block; touch-action: pan-y; }
+.chart .band { fill: var(--violet); opacity: 0.16; }
+.chart .grid-line { stroke: var(--line); stroke-width: 1px; }
+.chart .tick { fill: var(--text-faint); font-family: var(--mono); font-size: 11px; }
+.chart .limit-label { fill: var(--text-dim); font-family: var(--mono); font-size: 11px; }
+.chart .crosshair { stroke: var(--text-dim); stroke-width: 1px; }
+.chart .dot { fill: var(--violet); stroke: var(--panel); stroke-width: 2px; }
+.chart-tip { position: absolute; top: 6px; transform: translateX(-50%); pointer-events: none; display: grid; gap: 2px;
+  background: var(--panel-2); border: 1px solid var(--line-bright); border-radius: var(--radius); padding: 6px 9px; font-size: 12px; white-space: nowrap; }
+.chart-tip strong { font-family: var(--mono); font-size: 14px; color: var(--text); }
+.chart-key { display: flex; align-items: center; gap: 6px; font-size: 11.5px; margin-top: 4px; }
+.chart-key span { display: inline-block; width: 18px; }
+.key-line { height: 2px; background: var(--violet); }
+.key-band { height: 9px; background: var(--violet); opacity: 0.16; margin-left: 10px; }
+.key-limit { border-top: 1px dashed var(--text-faint); margin-left: 10px; }
+.table-scroll { max-height: 320px; overflow: auto; }
+
+.obs-form { display: grid; gap: 8px; margin-bottom: 14px; }
+.obs-form textarea { width: 100%; background: var(--bg-2); color: var(--text); border: 1px solid var(--line-bright); border-radius: var(--radius);
+  padding: 8px 10px; font: inherit; resize: vertical; }
+.obs-form select, .controls select { background: var(--bg-2); color: var(--text); border: 1px solid var(--line-bright); border-radius: var(--radius); padding: 6px 8px; }
+.observations { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.obs { border-left: 3px solid var(--line-bright); padding: 2px 0 2px 10px; }
+.obs.sev-high { border-left-color: var(--red); }
+.obs.sev-medium { border-left-color: var(--amber); }
+.obs-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12px; }
+.obs-summary { margin-top: 3px; }
+.obs-text { font-size: 12.5px; margin-top: 2px; }
+.sev { font-family: var(--mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: 1px; }
+.sev.sev-high { color: var(--red); font-weight: 600; }
+.sev.sev-medium { color: var(--amber); }
+.sev.sev-low { color: var(--text-dim); }
+@media (max-width: 900px) { .factory-top { grid-template-columns: 1fr; } }

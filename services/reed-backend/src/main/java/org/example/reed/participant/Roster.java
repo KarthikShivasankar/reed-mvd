@@ -40,7 +40,7 @@ public final class Roster {
                                   ConnectorSpec connector, String identity, List<String> attestations,
                                   List<RelationSpec> relations, CapabilityClaim capability,
                                   JsonNode confidentialCapability, List<String> assets,
-                                  List<HistorySpec> history, List<UserSpec> users) {
+                                  List<HistorySpec> history, List<UserSpec> users, FactorySpec factory) {
 
         public boolean member() {
             return consortium == null || consortium;
@@ -65,6 +65,20 @@ public final class Roster {
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record ConnectorSpec(String name, String portPrefix) {
+    }
+
+    /** A company's shop-floor line: machines and their sensors (published over MQTT by its devices). */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record FactorySpec(String name, List<MachineSpec> machines) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record MachineSpec(String id, String name, List<SensorSpec> sensors) {
+    }
+
+    /** {@code lo}/{@code hi}: operating limits (either may be absent); {@code action}: what to do when it trends out. */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record SensorSpec(String id, String name, String unit, Double lo, Double hi, String action) {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)

@@ -52,6 +52,16 @@ export const TAB_HELP: Record<string, TabHelp> = {
     ],
     usage: "Accepting a shortlist tells the buyer you want to quote; the buyer can then contract for your confidential capability.",
   },
+  factory: {
+    role: "Your own shop floor: sensors from the machines on your line (live and the last 7 days), what operators noticed, and what to do next.",
+    contains: [
+      "Every sensor's live value, status and last hour; click one for its 24 h or 7 day history against its limits.",
+      "What needs attention: trends heading for a limit (with the time left), readings far from their own history, silent devices.",
+      "Operators' observations in plain language, tagged by machine, category and severity by the local model (personal data removed first).",
+      "A shift briefing that joins the sensor findings with the observations.",
+    ],
+    usage: "Devices publish over MQTT (reed/factory/<company>/...); REED stores and analyses every reading each minute and publishes status changes and observations back on MQTT. Only your organisation and the dataspace operator see your line.",
+  },
   assistant: {
     role: "A question-answering helper for matchmaking, running on a local model (Qwen3.8 via LiteLLM) inside the deployment.",
     contains: [

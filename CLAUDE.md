@@ -34,6 +34,7 @@ docker compose -f deployment/docker-compose.yml up --build -d    # --profile vll
 ./run-transfer.sh                  # DCP e2e: 1 contract + pull, 2 credential refusals (exit 0 = all PASS)
 ./run-matchmaking.sh               # 11 scenarios (SCENARIO=K1 for one)
 ./run-persistence.sh               # down + up with volumes kept: nothing may need re-seeding
+./run-factory.sh                   # shop floor: MQTT auth/ACL, live stream, history, observations, briefing, scoping
 ./gradlew :services:reed-backend:test                          # scorer, fixtures, assistant guardrails
 cd services/reed-dashboard && npx playwright test              # UI e2e (stack must be up + seeded)
 docker compose -f deployment/docker-compose.yml down -v        # -v drops Vault + Postgres (seed again)
@@ -122,16 +123,37 @@ Spring Boot 3.3 + Postgres, schema by **Flyway** (`db/migration`, Hibernate `val
   and serves them at `/reed/connectors/<name>/edrs/<transferId>`.
 - All EDC `*/request` list endpoints need a `QuerySpec` body.
 
+### Shop floor (`factory/`, `services/factory-sim/`, Factory view)
+- A roster participant's `"factory"` (machines -> sensors with unit, `lo`/`hi` limits, `action`) defines its line.
+  `<name>-factory` (stdlib Python + paho-mqtt) simulates the devices: value = nominal + daily swing + a wear ramp
+  that resets each cycle (+ noise), so backfill and live are one curve. It publishes QoS 1 to
+  `reed/factory/<company>/<machine>/<sensor>` every 5 s and backfills `.../history` (1 min) from its last
+  published time (7 days on first start; state in volume `reed-factory-<name>`).
+- Mosquitto (`deployment/mosquitto/`, generated): a password per client from `.env`, hashed at broker start; ACL
+  lets a device (username = connector name) publish only under its own company. Devices start **after** the backend
+  is healthy: REED's persistent session (clean session off, QoS 1, `max_queued_messages`) must exist before the
+  backfill, and then queues readings while REED restarts.
+- `FactoryService` stores readings in `reed_sensor_reading` (PK sensor_key+ts, `ON CONFLICT DO NOTHING`, 30-day
+  retention), analyses every sensor each minute with the pure `TrendAnalyzer` (limits, least-squares slope -> hours to
+  limit, z vs 7-day baseline, on 1-min averages), publishes status changes on `reed/factory/<c>/alerts`, and streams
+  readings/insights/observations to the company's users (SSE, `X-Accel-Buffering: no` for nginx; the dashboard reads
+  it with fetch so the bearer token is a header).
+- Observations: redacted text -> local LLM tags machine/category/severity/summary (enum-checked, numbers grounded;
+  the model may raise severity, never lower it below the `ObservationTagger` rules), fallback rules. Published on
+  `reed/factory/<c>/observations` without author or personal data; the original text stays in the company's view.
+- Scoping: a user sees only their own company's line (`participant` claim); the operator reads any line
+  (`?participant=`) but cannot post observations.
+
 ### Ports and URL rule
 Connector prefixes: 19 nordvind, 29 castellum, 41 hanse, 42 wisla, 43 maasvlakte, 44 rhein-ndt, 45 komatsu,
 39 FC (suffixes 191 api, 192 control, 193 management, 194 DSP, 195 version, 291 public). Prefixes
 ≥ 66 overflow the port range. Container-to-container URLs use service names; browser/host URLs
-use `localhost`. **Everything is https** (local CA in `deployment/tls/`, gitignored; CA key
-`deployment/tls-ca.key`): EDC Jetty from `/tls/<host>.p12`, JVMs trust only `/tls/truststore.p12`
-(via `JAVA_TOOL_OPTIONS`), JDBC `sslmode=verify-full`, Postgres `hostssl` only, `did:web` over https,
-issuer status lists `edc.statuslist.callback.address`. Scripts export `CURL_CA_BUNDLE`; Playwright
-uses `ignoreHTTPSErrors`. Ollama on the host stays http. Dashboard 8088, Keycloak 8180, backend 8081, LiteLLM 4000, vLLM 8000,
-IdentityHub admin `<prefix>081`, Issuer admin 10013/10015, Vault 8200, Postgres 5432.
+use `localhost`. Everything is plain http. The browser has one origin, `http://127.0.0.1:8088` (an IP: no HSTS
+upgrades): the dashboard's nginx proxies Keycloak (`/realms`, `/resources`, `/admin`; `KC_HOSTNAME` is that
+origin, and so is the backend's token issuer), the backend (`/reed`) and connector data planes
+(`/dp/<name>:<port>/public/`, rewritten from EDR endpoints in `api.ts`). Scripts use the direct ports.
+Dashboard 8088, Keycloak 8180, backend 8081, LiteLLM 4000, vLLM 8000,
+IdentityHub admin `<prefix>081`, Issuer admin 10013/10015, Vault 8200, Postgres 5432, MQTT 1883.
 
 ### Dashboard (`services/reed-dashboard/`)
 React + Vite + TS, keycloak-js login, all calls via the backend (bearer token), hash routing,

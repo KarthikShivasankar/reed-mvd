@@ -12,15 +12,10 @@ services:
     volumes:
       - ./vault-init/vault.hcl:/vault/config/vault.hcl:ro
       - reed-vault-data:/vault/file
-      - ./tls/ca.crt:/tls/ca.crt:ro
-      - ./tls/truststore.p12:/tls/truststore.p12:ro
-      - ./tls/vault.crt:/tls/vault.crt:ro
-      - ./tls/vault.key:/tls/vault.key:ro
-      - ./tls/vault.p12:/tls/vault.p12:ro
     ports: ["127.0.0.1:8200:8200"]
     healthcheck:
-      # healthy as soon as it answers, sealed or not (exit 2) - vault-init unseals it
-      test: ["CMD-SHELL", "VAULT_ADDR=https://127.0.0.1:8200 VAULT_CACERT=/tls/ca.crt vault status > /dev/null; [ $$? -ne 1 ]"]
+      # healthy as soon as it answers, sealed or not - vault-init unseals it
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8200/v1/sys/health?sealedcode=200&uninitcode=200"]
       interval: 2s
       retries: 30
 
@@ -60,31 +55,19 @@ services:
       - ./vault-init/init.sh:/init.sh:ro
       - ./vault/keys:/keys:ro
       - reed-vault-init:/vault/init
-      - ./tls/ca.crt:/tls/ca.crt:ro
-      - ./tls/truststore.p12:/tls/truststore.p12:ro
     entrypoint: ["/bin/sh", "/init.sh"]
 
   # ---------- Postgres: REED registry, Keycloak, Issuer, every IdentityHub and connector ----------
   postgres:
     image: postgres:16-alpine
     container_name: reed-postgres
-    # the server key must belong to the postgres user with mode 600: copy it out of the read-only mount
-    entrypoint: ["sh", "-c", "install -o postgres -g postgres -m 600 /tls/postgres.key /var/lib/postgresql/server.key && exec docker-entrypoint.sh \"$$@\"", "--"]
-    command: ["postgres", "-c", "ssl=on", "-c", "ssl_cert_file=/tls/postgres.crt",
-              "-c", "ssl_key_file=/var/lib/postgresql/server.key", "-c", "hba_file=/etc/reed/pg_hba.conf"]
     environment:
       POSTGRES_DB: reed
       POSTGRES_USER: reed
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - reed-pgdata:/var/lib/postgresql/data
-      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
-      - ./postgres/pg_hba.conf:/etc/reed/pg_hba.conf:ro
-      - ./tls/ca.crt:/tls/ca.crt:ro
-      - ./tls/truststore.p12:/tls/truststore.p12:ro
-      - ./tls/postgres.crt:/tls/postgres.crt:ro
-      - ./tls/postgres.key:/tls/postgres.key:ro
-      - ./tls/postgres.p12:/tls/postgres.p12:ro
+      - ./postgres:/docker-entrypoint-initdb.d:ro
     ports: ["127.0.0.1:5432:5432"]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U reed -d reed"]
@@ -101,25 +84,18 @@ services:
         condition: service_healthy
     environment:
       KC_DB: postgres
-      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak?sslmode=verify-full&sslrootcert=/tls/ca.crt
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
       KC_DB_USERNAME: reed
       KC_DB_PASSWORD: ${POSTGRES_PASSWORD}
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
-      KC_HOSTNAME: https://localhost:8180
+      # ponytail: plain http on localhost; production terminates TLS here (KC_HTTPS_*) or at a proxy.
+      KC_HOSTNAME: http://127.0.0.1:8088
       KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
-      KC_HTTPS_CERTIFICATE_FILE: /tls/keycloak.crt
-      KC_HTTPS_CERTIFICATE_KEY_FILE: /tls/keycloak.key
-      KC_HTTP_ENABLED: "false"
-      KC_HTTP_MANAGEMENT_SCHEME: http   # health endpoint (port 9000) stays container-internal
+      KC_HTTP_ENABLED: "true"
     volumes:
       - ./keycloak/reed-realm.json:/opt/keycloak/data/import/reed-realm.json:ro
-      - ./tls/ca.crt:/tls/ca.crt:ro
-      - ./tls/truststore.p12:/tls/truststore.p12:ro
-      - ./tls/keycloak.crt:/tls/keycloak.crt:ro
-      - ./tls/keycloak.key:/tls/keycloak.key:ro
-      - ./tls/keycloak.p12:/tls/keycloak.p12:ro
-    ports: ["127.0.0.1:8180:8443"]
+    ports: ["127.0.0.1:8180:8080"]
     healthcheck:
       test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /health/ready HTTP/1.0\r\n\r\n' >&3 && grep -q UP <&3"]
       interval: 5s
@@ -129,19 +105,12 @@ services:
   litellm:
     image: ghcr.io/berriai/litellm:main-v1.89.2
     container_name: reed-litellm
-    command: ["--config", "/app/config.yaml", "--port", "4000",
-              "--ssl_keyfile_path", "/tls/litellm.key", "--ssl_certfile_path", "/tls/litellm.crt"]
+    command: ["--config", "/app/config.yaml", "--port", "4000"]
     environment:
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY}
-      SSL_CERT_FILE: /tls/ca.crt   # trust the REED CA towards vLLM
     extra_hosts: ["host.docker.internal:host-gateway"]
     volumes:
       - ./litellm/config.yaml:/app/config.yaml:ro
-      - ./tls/ca.crt:/tls/ca.crt:ro
-      - ./tls/truststore.p12:/tls/truststore.p12:ro
-      - ./tls/litellm.crt:/tls/litellm.crt:ro
-      - ./tls/litellm.key:/tls/litellm.key:ro
-      - ./tls/litellm.p12:/tls/litellm.p12:ro
     ports: ["127.0.0.1:4000:4000"]
 
   # Optional GPU backend (docker compose --profile vllm up): Qwen3.8 NVFP4 from the local HF cache.
@@ -158,16 +127,63 @@ services:
       HF_HUB_OFFLINE: "1"
     volumes:
       - ${HOME}/.cache/huggingface:/root/.cache/huggingface
-      - ./tls/ca.crt:/tls/ca.crt:ro
-      - ./tls/truststore.p12:/tls/truststore.p12:ro
-      - ./tls/vllm.crt:/tls/vllm.crt:ro
-      - ./tls/vllm.key:/tls/vllm.key:ro
-      - ./tls/vllm.p12:/tls/vllm.p12:ro
     command: ["--model", "nvidia/Qwen3.8-27B-NVFP4", "--served-model-name", "qwen3.8",
-              "--ssl-keyfile", "/tls/vllm.key", "--ssl-certfile", "/tls/vllm.crt",
               "--max-model-len", "32768", "--gpu-memory-utilization", "0.45",
               "--enable-auto-tool-choice", "--tool-call-parser", "qwen3_coder", "--reasoning-parser", "qwen3"]
     ports: ["127.0.0.1:8000:8000"]
+
+  # ---------- MQTT broker (shop-floor sensors, alerts, operator observations) ----------
+  mosquitto:
+    image: eclipse-mosquitto:2.0.20
+    container_name: reed-mosquitto
+    entrypoint: ["sh", "-c", "set -e; umask 077; mosquitto_passwd -c -b /mosquitto/data/passwd reed-backend \"$$MQTT_PASSWORD_REED_BACKEND\"; mosquitto_passwd -b /mosquitto/data/passwd castellum \"$$MQTT_PASSWORD_CASTELLUM\"; mosquitto_passwd -b /mosquitto/data/passwd wisla \"$$MQTT_PASSWORD_WISLA\"; chown -R mosquitto:mosquitto /mosquitto/data; exec mosquitto -c /mosquitto/config/mosquitto.conf"]
+    environment:
+      MQTT_PASSWORD_REED_BACKEND: ${MQTT_PASSWORD_REED_BACKEND}
+      MQTT_PASSWORD_CASTELLUM: ${MQTT_PASSWORD_CASTELLUM}
+      MQTT_PASSWORD_WISLA: ${MQTT_PASSWORD_WISLA}
+    mem_limit: 64m
+    volumes:
+      - ./mosquitto:/mosquitto/config:ro
+      - reed-mosquitto-data:/mosquitto/data
+    ports: ["127.0.0.1:1883:1883"]
+    healthcheck:
+      test: ["CMD-SHELL", "mosquitto_pub -h 127.0.0.1 -u reed-backend -P \"$$MQTT_PASSWORD_REED_BACKEND\" -t reed/factory/health -n"]
+      interval: 5s
+      retries: 30
+
+  # Castellum's shop-floor devices (simulated demo line from the roster): sensors over MQTT.
+  castellum-factory:
+    image: reed/factory-sim:local
+    build:
+      context: ../services/factory-sim
+    container_name: reed-castellum-factory
+    depends_on:  # the backend's persistent MQTT session must exist before the history backfill
+      reed-backend:
+        condition: service_healthy
+    environment:
+      COMPANY: castellum
+      MQTT_PASSWORD: ${MQTT_PASSWORD_CASTELLUM}
+    mem_limit: 64m
+    volumes:
+      - ./roster.json:/app/roster.json:ro
+      - reed-factory-castellum:/state
+
+  # Wisła's shop-floor devices (simulated demo line from the roster): sensors over MQTT.
+  wisla-factory:
+    image: reed/factory-sim:local
+    build:
+      context: ../services/factory-sim
+    container_name: reed-wisla-factory
+    depends_on:  # the backend's persistent MQTT session must exist before the history backfill
+      reed-backend:
+        condition: service_healthy
+    environment:
+      COMPANY: wisla
+      MQTT_PASSWORD: ${MQTT_PASSWORD_WISLA}
+    mem_limit: 64m
+    volumes:
+      - ./roster.json:/app/roster.json:ro
+      - reed-factory-wisla:/state
 
   # ---------- REED backend ----------
   reed-backend:
@@ -178,12 +194,12 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      mosquitto:
+        condition: service_healthy
       keycloak:
         condition: service_healthy
     environment:
-      REED_DB_URL: jdbc:postgresql://postgres:5432/reed?sslmode=verify-full&sslrootcert=/tls/ca.crt
-      SERVER_SSL_CERTIFICATE: file:/tls/reed-backend.crt
-      SERVER_SSL_CERTIFICATE_PRIVATE_KEY: file:/tls/reed-backend.key
+      REED_DB_URL: jdbc:postgresql://postgres:5432/reed
       REED_DB_USER: reed
       REED_DB_PASSWORD: ${POSTGRES_PASSWORD}
       REED_MGMT_KEYS: ${REED_MGMT_KEYS}
@@ -192,18 +208,16 @@ services:
       REED_DID_PATTERN: "did:web:{name}-ih%3A7083:{name}"
       REED_LLM_API_KEY: ${LITELLM_MASTER_KEY}
       REED_LLM_MODEL: ${REED_LLM_MODEL:-reed-llm}
-      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75 -Djavax.net.ssl.trustStore=/tls/truststore.p12 -Djavax.net.ssl.trustStoreType=PKCS12 -Djavax.net.ssl.trustStorePassword=reed-trust
+      REED_ISSUER: http://127.0.0.1:8088/realms/reed
+      REED_CORS_ORIGINS: http://127.0.0.1:8088
+      REED_MQTT_PASSWORD: ${MQTT_PASSWORD_REED_BACKEND}
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75
     volumes:
       - ./roster.json:/app/deployment/roster.json:ro
       - ./scenarios:/app/deployment/scenarios:ro
-      - ./tls/ca.crt:/tls/ca.crt:ro
-      - ./tls/truststore.p12:/tls/truststore.p12:ro
-      - ./tls/reed-backend.crt:/tls/reed-backend.crt:ro
-      - ./tls/reed-backend.key:/tls/reed-backend.key:ro
-      - ./tls/reed-backend.p12:/tls/reed-backend.p12:ro
     ports: ["127.0.0.1:8081:8080"]
     healthcheck:
-      test: ["CMD", "curl", "-fs", "--cacert", "/tls/ca.crt", "https://127.0.0.1:8080/reed/health"]
+      test: ["CMD", "curl", "-fs", "http://127.0.0.1:8080/reed/health"]
       interval: 5s
       retries: 60
 
@@ -223,20 +237,13 @@ services:
       EDC_DATASOURCE_DEFAULT_PASSWORD: ${POSTGRES_PASSWORD}
       EDC_IH_API_SUPERUSER_KEY: ${ISSUER_KEY}
       EDC_DATASOURCE_REED_PASSWORD: ${POSTGRES_PASSWORD}
-      EDC_WEB_HTTPS_KEYSTORE_PASSWORD: ${TLS_KEYSTORE_PASSWORD}
-      EDC_WEB_HTTPS_KEYMANAGER_PASSWORD: ${TLS_KEYSTORE_PASSWORD}
-      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75 -Djavax.net.ssl.trustStore=/tls/truststore.p12 -Djavax.net.ssl.trustStoreType=PKCS12 -Djavax.net.ssl.trustStorePassword=reed-trust
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75
     mem_limit: 1g
     volumes:
       - ./issuerservice/config.properties:/app/config/config.properties:ro
-      - ./tls/ca.crt:/tls/ca.crt:ro
-      - ./tls/truststore.p12:/tls/truststore.p12:ro
-      - ./tls/issuerservice.crt:/tls/issuerservice.crt:ro
-      - ./tls/issuerservice.key:/tls/issuerservice.key:ro
-      - ./tls/issuerservice.p12:/tls/issuerservice.p12:ro
     ports: ["127.0.0.1:10013:10013", "127.0.0.1:10015:10015"]   # issuer admin + identity APIs (x-api-key)
     healthcheck:
-      test: ["CMD", "curl", "-fs", "--cacert", "/tls/ca.crt", "https://127.0.0.1:10010/api/check/readiness"]
+      test: ["CMD", "curl", "-fs", "http://127.0.0.1:10010/api/check/readiness"]
       interval: 5s
       retries: 60
 
@@ -259,20 +266,13 @@ services:
       EDC_VAULT_HASHICORP_TOKEN: ${VAULT_TOKEN_NORDVIND}
       EDC_DATASOURCE_DEFAULT_PASSWORD: ${POSTGRES_PASSWORD}
       EDC_IH_API_SUPERUSER_KEY: ${IH_KEY_NORDVIND}
-      EDC_WEB_HTTPS_KEYSTORE_PASSWORD: ${TLS_KEYSTORE_PASSWORD}
-      EDC_WEB_HTTPS_KEYMANAGER_PASSWORD: ${TLS_KEYSTORE_PASSWORD}
-      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75 -Djavax.net.ssl.trustStore=/tls/truststore.p12 -Djavax.net.ssl.trustStoreType=PKCS12 -Djavax.net.ssl.trustStorePassword=reed-trust
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75
     mem_limit: 1g
     volumes:
       - ./identityhub/nordvind.properties:/app/config/config.properties:ro
-      - ./tls/ca.crt:/tls/ca.crt:ro
-      - ./tls/truststore.p12:/tls/truststore.p12:ro
-      - ./tls/nordvind-ih.crt:/tls/nordvind-ih.crt:ro
-      - ./tls/nordvind-ih.key:/tls/nordvind-ih.key:ro
-      - ./tls/nordvind-ih.p12:/tls/nordvind-ih.p12:ro
     ports: ["127.0.0.1:19081:7081"]   # identity admin API (x-api-key), used by seed-identity.sh
     healthcheck:
-      test: ["CMD", "curl", "-fs", "--cacert", "/tls/ca.crt", "https://127.0.0.1:7080/api/check/readiness"]
+      test: ["CMD", "curl", "-fs", "http://127.0.0.1:7080/api/check/readiness"]
       interval: 5s
       retries: 60
 
@@ -295,20 +295,13 @@ services:
       EDC_VAULT_HASHICORP_TOKEN: ${VAULT_TOKEN_HANSE}
       EDC_DATASOURCE_DEFAULT_PASSWORD: ${POSTGRES_PASSWORD}
       EDC_IH_API_SUPERUSER_KEY: ${IH_KEY_HANSE}
-      EDC_WEB_HTTPS_KEYSTORE_PASSWORD: ${TLS_KEYSTORE_PASSWORD}
-      EDC_WEB_HTTPS_KEYMANAGER_PASSWORD: ${TLS_KEYSTORE_PASSWORD}
-      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75 -Djavax.net.ssl.trustStore=/tls/truststore.p12 -Djavax.net.ssl.trustStoreType=PKCS12 -Djavax.net.ssl.trustStorePassword=reed-trust
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75
     mem_limit: 1g
     volumes:
       - ./identityhub/hanse.properties:/app/config/config.properties:ro
-      - ./tls/ca.crt:/tls/ca.crt:ro
-      - ./tls/truststore.p12:/tls/truststore.p12:ro
-      - ./tls/hanse-ih.crt:/tls/hanse-ih.crt:ro
-      - ./tls/hanse-ih.key:/tls/hanse-ih.key:ro
-      - ./tls/hanse-ih.p12:/tls/hanse-ih.p12:ro
     ports: ["127.0.0.1:41081:7081"]   # identity admin API (x-api-key), used by seed-identity.sh
     healthcheck:
-      test: ["CMD", "curl", "-fs", "--cacert", "/tls/ca.crt", "https://127.0.0.1:7080/api/check/readiness"]
+      test: ["CMD", "curl", "-fs", "http://127.0.0.1:7080/api/check/readiness"]
       interval: 5s
       retries: 60
 
@@ -331,20 +324,13 @@ services:
       EDC_VAULT_HASHICORP_TOKEN: ${VAULT_TOKEN_CASTELLUM}
       EDC_DATASOURCE_DEFAULT_PASSWORD: ${POSTGRES_PASSWORD}
       EDC_IH_API_SUPERUSER_KEY: ${IH_KEY_CASTELLUM}
-      EDC_WEB_HTTPS_KEYSTORE_PASSWORD: ${TLS_KEYSTORE_PASSWORD}
-      EDC_WEB_HTTPS_KEYMANAGER_PASSWORD: ${TLS_KEYSTORE_PASSWORD}
-      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75 -Djavax.net.ssl.trustStore=/tls/truststore.p12 -Djavax.net.ssl.trustStoreType=PKCS12 -Djavax.net.ssl.trustStorePassword=reed-trust
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75
     mem_limit: 1g
     volumes:
       - ./identityhub/castellum.properties:/app/config/config.properties:ro
-      - ./tls/ca.crt:/tls/ca.crt:ro
-      - ./tls/truststore.p12:/tls/truststore.p12:ro
-      - ./tls/castellum-ih.crt:/tls/castellum-ih.crt:ro
-      - ./tls/castellum-ih.key:/tls/castellum-ih.key:ro
-      - ./tls/castellum-ih.p12:/tls/castellum-ih.p12:ro
     ports: ["127.0.0.1:29081:7081"]   # identity admin API (x-api-key), used by seed-identity.sh
     healthcheck:
-      test: ["CMD", "curl", "-fs", "--cacert", "/tls/ca.crt", "https://127.0.0.1:7080/api/check/readiness"]
+      test: ["CMD", "curl", "-fs", "http://127.0.0.1:7080/api/check/readiness"]
       interval: 5s
       retries: 60
 
@@ -367,20 +353,13 @@ services:
       EDC_VAULT_HASHICORP_TOKEN: ${VAULT_TOKEN_WISLA}
       EDC_DATASOURCE_DEFAULT_PASSWORD: ${POSTGRES_PASSWORD}
       EDC_IH_API_SUPERUSER_KEY: ${IH_KEY_WISLA}
-      EDC_WEB_HTTPS_KEYSTORE_PASSWORD: ${TLS_KEYSTORE_PASSWORD}
-      EDC_WEB_HTTPS_KEYMANAGER_PASSWORD: ${TLS_KEYSTORE_PASSWORD}
-      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75 -Djavax.net.ssl.trustStore=/tls/truststore.p12 -Djavax.net.ssl.trustStoreType=PKCS12 -Djavax.net.ssl.trustStorePassword=reed-trust
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75
     mem_limit: 1g
     volumes:
       - ./identityhub/wisla.properties:/app/config/config.properties:ro
-      - ./tls/ca.crt:/tls/ca.crt:ro
-      - ./tls/truststore.p12:/tls/truststore.p12:ro
-      - ./tls/wisla-ih.crt:/tls/wisla-ih.crt:ro
-      - ./tls/wisla-ih.key:/tls/wisla-ih.key:ro
-      - ./tls/wisla-ih.p12:/tls/wisla-ih.p12:ro
     ports: ["127.0.0.1:42081:7081"]   # identity admin API (x-api-key), used by seed-identity.sh
     healthcheck:
-      test: ["CMD", "curl", "-fs", "--cacert", "/tls/ca.crt", "https://127.0.0.1:7080/api/check/readiness"]
+      test: ["CMD", "curl", "-fs", "http://127.0.0.1:7080/api/check/readiness"]
       interval: 5s
       retries: 60
 
@@ -403,20 +382,13 @@ services:
       EDC_VAULT_HASHICORP_TOKEN: ${VAULT_TOKEN_MAASVLAKTE}
       EDC_DATASOURCE_DEFAULT_PASSWORD: ${POSTGRES_PASSWORD}
       EDC_IH_API_SUPERUSER_KEY: ${IH_KEY_MAASVLAKTE}
-      EDC_WEB_HTTPS_KEYSTORE_PASSWORD: ${TLS_KEYSTORE_PASSWORD}
-      EDC_WEB_HTTPS_KEYMANAGER_PASSWORD: ${TLS_KEYSTORE_PASSWORD}
-      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75 -Djavax.net.ssl.trustStore=/tls/truststore.p12 -Djavax.net.ssl.trustStoreType=PKCS12 -Djavax.net.ssl.trustStorePassword=reed-trust
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75
     mem_limit: 1g
     volumes:
       - ./identityhub/maasvlakte.properties:/app/config/config.properties:ro
-      - ./tls/ca.crt:/tls/ca.crt:ro
-      - ./tls/truststore.p12:/tls/truststore.p12:ro
-      - ./tls/maasvlakte-ih.crt:/tls/maasvlakte-ih.crt:ro
-      - ./tls/maasvlakte-ih.key:/tls/maasvlakte-ih.key:ro
-      - ./tls/maasvlakte-ih.p12:/tls/maasvlakte-ih.p12:ro
     ports: ["127.0.0.1:43081:7081"]   # identity admin API (x-api-key), used by seed-identity.sh
     healthcheck:
-      test: ["CMD", "curl", "-fs", "--cacert", "/tls/ca.crt", "https://127.0.0.1:7080/api/check/readiness"]
+      test: ["CMD", "curl", "-fs", "http://127.0.0.1:7080/api/check/readiness"]
       interval: 5s
       retries: 60
 
@@ -439,20 +411,13 @@ services:
       EDC_VAULT_HASHICORP_TOKEN: ${VAULT_TOKEN_RHEIN_NDT}
       EDC_DATASOURCE_DEFAULT_PASSWORD: ${POSTGRES_PASSWORD}
       EDC_IH_API_SUPERUSER_KEY: ${IH_KEY_RHEIN_NDT}
-      EDC_WEB_HTTPS_KEYSTORE_PASSWORD: ${TLS_KEYSTORE_PASSWORD}
-      EDC_WEB_HTTPS_KEYMANAGER_PASSWORD: ${TLS_KEYSTORE_PASSWORD}
-      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75 -Djavax.net.ssl.trustStore=/tls/truststore.p12 -Djavax.net.ssl.trustStoreType=PKCS12 -Djavax.net.ssl.trustStorePassword=reed-trust
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75
     mem_limit: 1g
     volumes:
       - ./identityhub/rhein-ndt.properties:/app/config/config.properties:ro
-      - ./tls/ca.crt:/tls/ca.crt:ro
-      - ./tls/truststore.p12:/tls/truststore.p12:ro
-      - ./tls/rhein-ndt-ih.crt:/tls/rhein-ndt-ih.crt:ro
-      - ./tls/rhein-ndt-ih.key:/tls/rhein-ndt-ih.key:ro
-      - ./tls/rhein-ndt-ih.p12:/tls/rhein-ndt-ih.p12:ro
     ports: ["127.0.0.1:44081:7081"]   # identity admin API (x-api-key), used by seed-identity.sh
     healthcheck:
-      test: ["CMD", "curl", "-fs", "--cacert", "/tls/ca.crt", "https://127.0.0.1:7080/api/check/readiness"]
+      test: ["CMD", "curl", "-fs", "http://127.0.0.1:7080/api/check/readiness"]
       interval: 5s
       retries: 60
 
@@ -475,20 +440,13 @@ services:
       EDC_VAULT_HASHICORP_TOKEN: ${VAULT_TOKEN_KOMATSU}
       EDC_DATASOURCE_DEFAULT_PASSWORD: ${POSTGRES_PASSWORD}
       EDC_IH_API_SUPERUSER_KEY: ${IH_KEY_KOMATSU}
-      EDC_WEB_HTTPS_KEYSTORE_PASSWORD: ${TLS_KEYSTORE_PASSWORD}
-      EDC_WEB_HTTPS_KEYMANAGER_PASSWORD: ${TLS_KEYSTORE_PASSWORD}
-      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75 -Djavax.net.ssl.trustStore=/tls/truststore.p12 -Djavax.net.ssl.trustStoreType=PKCS12 -Djavax.net.ssl.trustStorePassword=reed-trust
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75
     mem_limit: 1g
     volumes:
       - ./identityhub/komatsu.properties:/app/config/config.properties:ro
-      - ./tls/ca.crt:/tls/ca.crt:ro
-      - ./tls/truststore.p12:/tls/truststore.p12:ro
-      - ./tls/komatsu-ih.crt:/tls/komatsu-ih.crt:ro
-      - ./tls/komatsu-ih.key:/tls/komatsu-ih.key:ro
-      - ./tls/komatsu-ih.p12:/tls/komatsu-ih.p12:ro
     ports: ["127.0.0.1:45081:7081"]   # identity admin API (x-api-key), used by seed-identity.sh
     healthcheck:
-      test: ["CMD", "curl", "-fs", "--cacert", "/tls/ca.crt", "https://127.0.0.1:7080/api/check/readiness"]
+      test: ["CMD", "curl", "-fs", "http://127.0.0.1:7080/api/check/readiness"]
       interval: 5s
       retries: 60
 
@@ -511,20 +469,13 @@ services:
       EDC_VAULT_HASHICORP_TOKEN: ${VAULT_TOKEN_FEDERATED_CATALOG}
       EDC_DATASOURCE_DEFAULT_PASSWORD: ${POSTGRES_PASSWORD}
       EDC_IH_API_SUPERUSER_KEY: ${IH_KEY_FEDERATED_CATALOG}
-      EDC_WEB_HTTPS_KEYSTORE_PASSWORD: ${TLS_KEYSTORE_PASSWORD}
-      EDC_WEB_HTTPS_KEYMANAGER_PASSWORD: ${TLS_KEYSTORE_PASSWORD}
-      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75 -Djavax.net.ssl.trustStore=/tls/truststore.p12 -Djavax.net.ssl.trustStoreType=PKCS12 -Djavax.net.ssl.trustStorePassword=reed-trust
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75
     mem_limit: 1g
     volumes:
       - ./identityhub/federated-catalog.properties:/app/config/config.properties:ro
-      - ./tls/ca.crt:/tls/ca.crt:ro
-      - ./tls/truststore.p12:/tls/truststore.p12:ro
-      - ./tls/federated-catalog-ih.crt:/tls/federated-catalog-ih.crt:ro
-      - ./tls/federated-catalog-ih.key:/tls/federated-catalog-ih.key:ro
-      - ./tls/federated-catalog-ih.p12:/tls/federated-catalog-ih.p12:ro
     ports: ["127.0.0.1:39081:7081"]   # identity admin API (x-api-key), used by seed-identity.sh
     healthcheck:
-      test: ["CMD", "curl", "-fs", "--cacert", "/tls/ca.crt", "https://127.0.0.1:7080/api/check/readiness"]
+      test: ["CMD", "curl", "-fs", "http://127.0.0.1:7080/api/check/readiness"]
       interval: 5s
       retries: 60
 
@@ -544,17 +495,10 @@ services:
     environment:
       EDC_VAULT_HASHICORP_TOKEN: ${VAULT_TOKEN_NORDVIND}
       EDC_DATASOURCE_DEFAULT_PASSWORD: ${POSTGRES_PASSWORD}
-      EDC_WEB_HTTPS_KEYSTORE_PASSWORD: ${TLS_KEYSTORE_PASSWORD}
-      EDC_WEB_HTTPS_KEYMANAGER_PASSWORD: ${TLS_KEYSTORE_PASSWORD}
-      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75 -Djavax.net.ssl.trustStore=/tls/truststore.p12 -Djavax.net.ssl.trustStoreType=PKCS12 -Djavax.net.ssl.trustStorePassword=reed-trust
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75
     mem_limit: 1g
     volumes:
       - ./nordvind/config.properties:/app/config/config.properties:ro
-      - ./tls/ca.crt:/tls/ca.crt:ro
-      - ./tls/truststore.p12:/tls/truststore.p12:ro
-      - ./tls/nordvind.crt:/tls/nordvind.crt:ro
-      - ./tls/nordvind.key:/tls/nordvind.key:ro
-      - ./tls/nordvind.p12:/tls/nordvind.p12:ro
     ports: ["127.0.0.1:19193:19193", "127.0.0.1:19291:19291"]   # Management API (key-protected) + public data plane
 
   # Nordvind's own data service: holds its confidential payloads, releases them only to its data
@@ -570,18 +514,9 @@ services:
     environment:
       COMPANY: nordvind
       DATA_KEY: ${DATA_KEY_NORDVIND}
-      REED_USAGE_URL: https://reed-backend:8080/reed/usage/decide
-      TLS_CERT: /tls/nordvind-data.crt
-      TLS_KEY: /tls/nordvind-data.key
-      TLS_CA: /tls/ca.crt
     mem_limit: 128m
     volumes:
       - ./payloads/nordvind:/data:ro
-      - ./tls/ca.crt:/tls/ca.crt:ro
-      - ./tls/truststore.p12:/tls/truststore.p12:ro
-      - ./tls/nordvind-data.crt:/tls/nordvind-data.crt:ro
-      - ./tls/nordvind-data.key:/tls/nordvind-data.key:ro
-      - ./tls/nordvind-data.p12:/tls/nordvind-data.p12:ro
 
   # Hanse Marine & Rail GmbH - OEM (Kiel, DE)
   hanse:
@@ -599,17 +534,10 @@ services:
     environment:
       EDC_VAULT_HASHICORP_TOKEN: ${VAULT_TOKEN_HANSE}
       EDC_DATASOURCE_DEFAULT_PASSWORD: ${POSTGRES_PASSWORD}
-      EDC_WEB_HTTPS_KEYSTORE_PASSWORD: ${TLS_KEYSTORE_PASSWORD}
-      EDC_WEB_HTTPS_KEYMANAGER_PASSWORD: ${TLS_KEYSTORE_PASSWORD}
-      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75 -Djavax.net.ssl.trustStore=/tls/truststore.p12 -Djavax.net.ssl.trustStoreType=PKCS12 -Djavax.net.ssl.trustStorePassword=reed-trust
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75
     mem_limit: 1g
     volumes:
       - ./hanse/config.properties:/app/config/config.properties:ro
-      - ./tls/ca.crt:/tls/ca.crt:ro
-      - ./tls/truststore.p12:/tls/truststore.p12:ro
-      - ./tls/hanse.crt:/tls/hanse.crt:ro
-      - ./tls/hanse.key:/tls/hanse.key:ro
-      - ./tls/hanse.p12:/tls/hanse.p12:ro
     ports: ["127.0.0.1:41193:41193", "127.0.0.1:41291:41291"]   # Management API (key-protected) + public data plane
 
   # Hanse's own data service: holds its confidential payloads, releases them only to its data
@@ -625,18 +553,9 @@ services:
     environment:
       COMPANY: hanse
       DATA_KEY: ${DATA_KEY_HANSE}
-      REED_USAGE_URL: https://reed-backend:8080/reed/usage/decide
-      TLS_CERT: /tls/hanse-data.crt
-      TLS_KEY: /tls/hanse-data.key
-      TLS_CA: /tls/ca.crt
     mem_limit: 128m
     volumes:
       - ./payloads/hanse:/data:ro
-      - ./tls/ca.crt:/tls/ca.crt:ro
-      - ./tls/truststore.p12:/tls/truststore.p12:ro
-      - ./tls/hanse-data.crt:/tls/hanse-data.crt:ro
-      - ./tls/hanse-data.key:/tls/hanse-data.key:ro
-      - ./tls/hanse-data.p12:/tls/hanse-data.p12:ro
 
   # Castellum Fundición S.L. - SUPPLIER (Bilbao, ES)
   castellum:
@@ -654,17 +573,10 @@ services:
     environment:
       EDC_VAULT_HASHICORP_TOKEN: ${VAULT_TOKEN_CASTELLUM}
       EDC_DATASOURCE_DEFAULT_PASSWORD: ${POSTGRES_PASSWORD}
-      EDC_WEB_HTTPS_KEYSTORE_PASSWORD: ${TLS_KEYSTORE_PASSWORD}
-      EDC_WEB_HTTPS_KEYMANAGER_PASSWORD: ${TLS_KEYSTORE_PASSWORD}
-      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75 -Djavax.net.ssl.trustStore=/tls/truststore.p12 -Djavax.net.ssl.trustStoreType=PKCS12 -Djavax.net.ssl.trustStorePassword=reed-trust
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75
     mem_limit: 1g
     volumes:
       - ./castellum/config.properties:/app/config/config.properties:ro
-      - ./tls/ca.crt:/tls/ca.crt:ro
-      - ./tls/truststore.p12:/tls/truststore.p12:ro
-      - ./tls/castellum.crt:/tls/castellum.crt:ro
-      - ./tls/castellum.key:/tls/castellum.key:ro
-      - ./tls/castellum.p12:/tls/castellum.p12:ro
     ports: ["127.0.0.1:29193:29193", "127.0.0.1:29291:29291"]   # Management API (key-protected) + public data plane
 
   # Castellum's own data service: holds its confidential payloads, releases them only to its data
@@ -680,18 +592,9 @@ services:
     environment:
       COMPANY: castellum
       DATA_KEY: ${DATA_KEY_CASTELLUM}
-      REED_USAGE_URL: https://reed-backend:8080/reed/usage/decide
-      TLS_CERT: /tls/castellum-data.crt
-      TLS_KEY: /tls/castellum-data.key
-      TLS_CA: /tls/ca.crt
     mem_limit: 128m
     volumes:
       - ./payloads/castellum:/data:ro
-      - ./tls/ca.crt:/tls/ca.crt:ro
-      - ./tls/truststore.p12:/tls/truststore.p12:ro
-      - ./tls/castellum-data.crt:/tls/castellum-data.crt:ro
-      - ./tls/castellum-data.key:/tls/castellum-data.key:ro
-      - ./tls/castellum-data.p12:/tls/castellum-data.p12:ro
 
   # Wisła Precision Machining Sp. z o.o. - SUPPLIER (Gdańsk, PL)
   wisla:
@@ -709,17 +612,10 @@ services:
     environment:
       EDC_VAULT_HASHICORP_TOKEN: ${VAULT_TOKEN_WISLA}
       EDC_DATASOURCE_DEFAULT_PASSWORD: ${POSTGRES_PASSWORD}
-      EDC_WEB_HTTPS_KEYSTORE_PASSWORD: ${TLS_KEYSTORE_PASSWORD}
-      EDC_WEB_HTTPS_KEYMANAGER_PASSWORD: ${TLS_KEYSTORE_PASSWORD}
-      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75 -Djavax.net.ssl.trustStore=/tls/truststore.p12 -Djavax.net.ssl.trustStoreType=PKCS12 -Djavax.net.ssl.trustStorePassword=reed-trust
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75
     mem_limit: 1g
     volumes:
       - ./wisla/config.properties:/app/config/config.properties:ro
-      - ./tls/ca.crt:/tls/ca.crt:ro
-      - ./tls/truststore.p12:/tls/truststore.p12:ro
-      - ./tls/wisla.crt:/tls/wisla.crt:ro
-      - ./tls/wisla.key:/tls/wisla.key:ro
-      - ./tls/wisla.p12:/tls/wisla.p12:ro
     ports: ["127.0.0.1:42193:42193", "127.0.0.1:42291:42291"]   # Management API (key-protected) + public data plane
 
   # Wisła's own data service: holds its confidential payloads, releases them only to its data
@@ -735,18 +631,9 @@ services:
     environment:
       COMPANY: wisla
       DATA_KEY: ${DATA_KEY_WISLA}
-      REED_USAGE_URL: https://reed-backend:8080/reed/usage/decide
-      TLS_CERT: /tls/wisla-data.crt
-      TLS_KEY: /tls/wisla-data.key
-      TLS_CA: /tls/ca.crt
     mem_limit: 128m
     volumes:
       - ./payloads/wisla:/data:ro
-      - ./tls/ca.crt:/tls/ca.crt:ro
-      - ./tls/truststore.p12:/tls/truststore.p12:ro
-      - ./tls/wisla-data.crt:/tls/wisla-data.crt:ro
-      - ./tls/wisla-data.key:/tls/wisla-data.key:ro
-      - ./tls/wisla-data.p12:/tls/wisla-data.p12:ro
 
   # Maasvlakte Heavy Lift B.V. - SERVICE (Rotterdam, NL)
   maasvlakte:
@@ -764,17 +651,10 @@ services:
     environment:
       EDC_VAULT_HASHICORP_TOKEN: ${VAULT_TOKEN_MAASVLAKTE}
       EDC_DATASOURCE_DEFAULT_PASSWORD: ${POSTGRES_PASSWORD}
-      EDC_WEB_HTTPS_KEYSTORE_PASSWORD: ${TLS_KEYSTORE_PASSWORD}
-      EDC_WEB_HTTPS_KEYMANAGER_PASSWORD: ${TLS_KEYSTORE_PASSWORD}
-      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75 -Djavax.net.ssl.trustStore=/tls/truststore.p12 -Djavax.net.ssl.trustStoreType=PKCS12 -Djavax.net.ssl.trustStorePassword=reed-trust
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75
     mem_limit: 1g
     volumes:
       - ./maasvlakte/config.properties:/app/config/config.properties:ro
-      - ./tls/ca.crt:/tls/ca.crt:ro
-      - ./tls/truststore.p12:/tls/truststore.p12:ro
-      - ./tls/maasvlakte.crt:/tls/maasvlakte.crt:ro
-      - ./tls/maasvlakte.key:/tls/maasvlakte.key:ro
-      - ./tls/maasvlakte.p12:/tls/maasvlakte.p12:ro
     ports: ["127.0.0.1:43193:43193", "127.0.0.1:43291:43291"]   # Management API (key-protected) + public data plane
 
   # Maasvlakte's own data service: holds its confidential payloads, releases them only to its data
@@ -790,18 +670,9 @@ services:
     environment:
       COMPANY: maasvlakte
       DATA_KEY: ${DATA_KEY_MAASVLAKTE}
-      REED_USAGE_URL: https://reed-backend:8080/reed/usage/decide
-      TLS_CERT: /tls/maasvlakte-data.crt
-      TLS_KEY: /tls/maasvlakte-data.key
-      TLS_CA: /tls/ca.crt
     mem_limit: 128m
     volumes:
       - ./payloads/maasvlakte:/data:ro
-      - ./tls/ca.crt:/tls/ca.crt:ro
-      - ./tls/truststore.p12:/tls/truststore.p12:ro
-      - ./tls/maasvlakte-data.crt:/tls/maasvlakte-data.crt:ro
-      - ./tls/maasvlakte-data.key:/tls/maasvlakte-data.key:ro
-      - ./tls/maasvlakte-data.p12:/tls/maasvlakte-data.p12:ro
 
   # Rhein NDT Prüflabor GmbH - SERVICE (Duisburg, DE)
   rhein-ndt:
@@ -819,17 +690,10 @@ services:
     environment:
       EDC_VAULT_HASHICORP_TOKEN: ${VAULT_TOKEN_RHEIN_NDT}
       EDC_DATASOURCE_DEFAULT_PASSWORD: ${POSTGRES_PASSWORD}
-      EDC_WEB_HTTPS_KEYSTORE_PASSWORD: ${TLS_KEYSTORE_PASSWORD}
-      EDC_WEB_HTTPS_KEYMANAGER_PASSWORD: ${TLS_KEYSTORE_PASSWORD}
-      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75 -Djavax.net.ssl.trustStore=/tls/truststore.p12 -Djavax.net.ssl.trustStoreType=PKCS12 -Djavax.net.ssl.trustStorePassword=reed-trust
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75
     mem_limit: 1g
     volumes:
       - ./rhein-ndt/config.properties:/app/config/config.properties:ro
-      - ./tls/ca.crt:/tls/ca.crt:ro
-      - ./tls/truststore.p12:/tls/truststore.p12:ro
-      - ./tls/rhein-ndt.crt:/tls/rhein-ndt.crt:ro
-      - ./tls/rhein-ndt.key:/tls/rhein-ndt.key:ro
-      - ./tls/rhein-ndt.p12:/tls/rhein-ndt.p12:ro
     ports: ["127.0.0.1:44193:44193", "127.0.0.1:44291:44291"]   # Management API (key-protected) + public data plane
 
   # Rhein NDT's own data service: holds its confidential payloads, releases them only to its data
@@ -845,18 +709,9 @@ services:
     environment:
       COMPANY: rhein-ndt
       DATA_KEY: ${DATA_KEY_RHEIN_NDT}
-      REED_USAGE_URL: https://reed-backend:8080/reed/usage/decide
-      TLS_CERT: /tls/rhein-ndt-data.crt
-      TLS_KEY: /tls/rhein-ndt-data.key
-      TLS_CA: /tls/ca.crt
     mem_limit: 128m
     volumes:
       - ./payloads/rhein-ndt:/data:ro
-      - ./tls/ca.crt:/tls/ca.crt:ro
-      - ./tls/truststore.p12:/tls/truststore.p12:ro
-      - ./tls/rhein-ndt-data.crt:/tls/rhein-ndt-data.crt:ro
-      - ./tls/rhein-ndt-data.key:/tls/rhein-ndt-data.key:ro
-      - ./tls/rhein-ndt-data.p12:/tls/rhein-ndt-data.p12:ro
 
   # Komatsu Mining Germany GmbH - OEM (Düsseldorf, DE)
   komatsu:
@@ -874,17 +729,10 @@ services:
     environment:
       EDC_VAULT_HASHICORP_TOKEN: ${VAULT_TOKEN_KOMATSU}
       EDC_DATASOURCE_DEFAULT_PASSWORD: ${POSTGRES_PASSWORD}
-      EDC_WEB_HTTPS_KEYSTORE_PASSWORD: ${TLS_KEYSTORE_PASSWORD}
-      EDC_WEB_HTTPS_KEYMANAGER_PASSWORD: ${TLS_KEYSTORE_PASSWORD}
-      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75 -Djavax.net.ssl.trustStore=/tls/truststore.p12 -Djavax.net.ssl.trustStoreType=PKCS12 -Djavax.net.ssl.trustStorePassword=reed-trust
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75
     mem_limit: 1g
     volumes:
       - ./komatsu/config.properties:/app/config/config.properties:ro
-      - ./tls/ca.crt:/tls/ca.crt:ro
-      - ./tls/truststore.p12:/tls/truststore.p12:ro
-      - ./tls/komatsu.crt:/tls/komatsu.crt:ro
-      - ./tls/komatsu.key:/tls/komatsu.key:ro
-      - ./tls/komatsu.p12:/tls/komatsu.p12:ro
     ports: ["127.0.0.1:45193:45193", "127.0.0.1:45291:45291"]   # Management API (key-protected) + public data plane
 
   # Komatsu's own data service: holds its confidential payloads, releases them only to its data
@@ -900,18 +748,9 @@ services:
     environment:
       COMPANY: komatsu
       DATA_KEY: ${DATA_KEY_KOMATSU}
-      REED_USAGE_URL: https://reed-backend:8080/reed/usage/decide
-      TLS_CERT: /tls/komatsu-data.crt
-      TLS_KEY: /tls/komatsu-data.key
-      TLS_CA: /tls/ca.crt
     mem_limit: 128m
     volumes:
       - ./payloads/komatsu:/data:ro
-      - ./tls/ca.crt:/tls/ca.crt:ro
-      - ./tls/truststore.p12:/tls/truststore.p12:ro
-      - ./tls/komatsu-data.crt:/tls/komatsu-data.crt:ro
-      - ./tls/komatsu-data.key:/tls/komatsu-data.key:ro
-      - ./tls/komatsu-data.p12:/tls/komatsu-data.p12:ro
 
   # ---------- Federated Catalog (crawls every connector) ----------
   federated-catalog:
@@ -940,18 +779,11 @@ services:
         condition: service_started
     environment:
       EDC_VAULT_HASHICORP_TOKEN: ${VAULT_TOKEN_FEDERATED_CATALOG}
-      EDC_WEB_HTTPS_KEYSTORE_PASSWORD: ${TLS_KEYSTORE_PASSWORD}
-      EDC_WEB_HTTPS_KEYMANAGER_PASSWORD: ${TLS_KEYSTORE_PASSWORD}
-      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75 -Djavax.net.ssl.trustStore=/tls/truststore.p12 -Djavax.net.ssl.trustStoreType=PKCS12 -Djavax.net.ssl.trustStorePassword=reed-trust
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75
     mem_limit: 1g
     volumes:
       - ./federated-catalog/config.properties:/app/config/config.properties:ro
       - ./federated-catalog/participants.json:/app/config/participants.json:ro
-      - ./tls/ca.crt:/tls/ca.crt:ro
-      - ./tls/truststore.p12:/tls/truststore.p12:ro
-      - ./tls/federated-catalog.crt:/tls/federated-catalog.crt:ro
-      - ./tls/federated-catalog.key:/tls/federated-catalog.key:ro
-      - ./tls/federated-catalog.p12:/tls/federated-catalog.p12:ro
     ports: ["127.0.0.1:39193:39193"]
 
   # ---------- REED Dashboard (React SPA; login via Keycloak) ----------
@@ -963,13 +795,11 @@ services:
     ports: ["127.0.0.1:8088:8080"]
     volumes:
       - ./dashboard/config.json:/usr/share/nginx/html/config.json:ro
-      - ./tls/ca.crt:/tls/ca.crt:ro
-      - ./tls/truststore.p12:/tls/truststore.p12:ro
-      - ./tls/dashboard.crt:/tls/dashboard.crt:ro
-      - ./tls/dashboard.key:/tls/dashboard.key:ro
-      - ./tls/dashboard.p12:/tls/dashboard.p12:ro
 
 volumes:
   reed-pgdata:
   reed-vault-data:
   reed-vault-init:
+  reed-mosquitto-data:
+  reed-factory-castellum:
+  reed-factory-wisla:

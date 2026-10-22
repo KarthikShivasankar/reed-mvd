@@ -14,10 +14,10 @@ set -euo pipefail
 LOG_TAG=identity
 source "$(dirname "$0")/tools/reed-lib.sh"
 
-ih()     { echo "https://localhost:$1081/api/identity/v1alpha"; }        # ih <port prefix>
+ih()     { echo "http://localhost:$1081/api/identity/v1alpha"; }        # ih <port prefix>
 ih_key() { local v="IH_KEY_$(echo "$1" | tr 'a-z-' 'A-Z_')"; echo "${!v}"; }  # ih_key <name>
-IS_ID="${IS_ID:-https://localhost:10015/api/identity/v1alpha}"
-IS_ADMIN="${IS_ADMIN:-https://localhost:10013/api/admin/v1alpha/participants/issuer}"
+IS_ID="${IS_ID:-http://localhost:10015/api/identity/v1alpha}"
+IS_ADMIN="${IS_ADMIN:-http://localhost:10013/api/admin/v1alpha/participants/issuer}"
 ISSUER_DID='did:web:issuerservice%3A10016:issuer'
 
 post() { # post <url> <json> [api key, default: the issuer's]
@@ -34,7 +34,7 @@ log "1. issuer tenant"
 post "$IS_ID/participants" '{
   "participantContextId": "issuer", "did": "'"$ISSUER_DID"'", "active": true, "roles": ["admin"],
   "serviceEndpoints": [{"id": "issuer-service-1", "type": "IssuerService",
-     "serviceEndpoint": "https://issuerservice:10012/api/issuance/v1alpha/participants/issuer"}],
+     "serviceEndpoint": "http://issuerservice:10012/api/issuance/v1alpha/participants/issuer"}],
   "key": {"keyId": "'"$ISSUER_DID"'#key-1", "privateKeyAlias": "'"$ISSUER_DID"'#key-1",
           "keyGeneratorParams": {"algorithm": "EdDSA"}}}'
 
@@ -70,8 +70,8 @@ for row in "${IDS[@]}"; do
     "participantContextId": "'"$n"'", "did": "'"$(did_of "$n")"'", "active": true, "roles": [],
     "serviceEndpoints": [
       {"id": "'"$n"'-credentialservice", "type": "CredentialService",
-       "serviceEndpoint": "https://'"$n"'-ih:7082/api/credentials/v1/participants/'"$n"'"},
-      {"id": "'"$n"'-dsp", "type": "ProtocolEndpoint", "serviceEndpoint": "https://'"$n"':'"$px"'194/protocol/2025-1"}],
+       "serviceEndpoint": "http://'"$n"'-ih:7082/api/credentials/v1/participants/'"$n"'"},
+      {"id": "'"$n"'-dsp", "type": "ProtocolEndpoint", "serviceEndpoint": "http://'"$n"':'"$px"'194/protocol/2025-1"}],
     "key": {"keyId": "'"$(did_of "$n")"'#key-1", "privateKeyAlias": "'"$n"'-did-key",
             "keyGeneratorParams": {"algorithm": "EC"}}}' "$(ih_key "$n")"
 done

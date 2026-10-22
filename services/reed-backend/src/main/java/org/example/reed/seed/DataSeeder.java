@@ -177,8 +177,8 @@ public class DataSeeder implements CommandLineRunner {
                 var name = spec.connector().name();
                 var prefix = spec.connector().portPrefix();
                 p.connectorName = name;
-                p.dspUrl = "https://" + name + ":" + prefix + "194/protocol/2025-1";
-                p.managementUrl = "https://" + name + ":" + prefix + "193/management";
+                p.dspUrl = "http://" + name + ":" + prefix + "194/protocol/2025-1";
+                p.managementUrl = "http://" + name + ":" + prefix + "193/management";
                 p.did = didPattern.replace("{name}", name);
             } else if (spec.identity() != null) {
                 // Identity-only member (e.g. the operator running the federated catalog).

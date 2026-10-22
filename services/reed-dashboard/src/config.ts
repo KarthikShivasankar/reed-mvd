@@ -8,8 +8,10 @@ export interface ConnectorRef {
   participantId: string;
   /** DSP address, resolved connector-to-connector inside Docker (service name). */
   dspUrl: string;
-  /** Public data plane the browser pulls EDR-protected payloads from. */
+  /** Public data plane base the connector puts in EDRs (the browser pulls through the dashboard's /dp/ proxy). */
   publicUrl: string;
+  /** The company has a shop-floor line (sensors over MQTT) - see the Factory view. */
+  factory?: boolean;
 }
 
 export interface AppConfig {

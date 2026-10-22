@@ -20,7 +20,6 @@ Usage:  python3 tools/gen_topology.py            # idempotent; re-run after edit
 """
 import base64
 import json
-import os
 import secrets
 import subprocess
 from pathlib import Path
@@ -31,10 +30,12 @@ roster = json.loads((DEP / "roster.json").read_text())
 DS = roster["dataspace"]
 PARTICIPANTS = roster["participants"]
 CONNECTORS = [p for p in PARTICIPANTS if p.get("connector")]
-DASHBOARD_ORIGIN = "https://localhost:8088"
-KEYCLOAK_URL = "https://localhost:8180"
-TLS = "/tls"  # mount point of deployment/tls in every container
-PG_SSL = "?sslmode=verify-full&sslrootcert=/tls/ca.crt"  # every JDBC connection: TLS, server verified
+FACTORIES = [p for p in CONNECTORS if p.get("factory")]  # companies with a (simulated) shop-floor line
+# The browser talks to one origin: the dashboard's nginx proxies Keycloak (/realms, /resources, ...), the backend
+# (/reed) and the connectors' public data planes (/dp/), so a remote host needs only port 8088 forwarded.
+# An IP, not "localhost": browsers never apply HSTS / https-upgrades to IP addresses.
+DASHBOARD_ORIGIN = "http://127.0.0.1:8088"
+KEYCLOAK_URL = DASHBOARD_ORIGIN  # browser-facing Keycloak, proxied
 FC_PREFIX = "39"
 ISSUER_DID = "did:web:issuerservice%3A10016:issuer"
 
@@ -111,7 +112,9 @@ secret("VAULT_TOKEN_ISSUER")
 secret("LITELLM_MASTER_KEY")
 secret("POSTGRES_PASSWORD")
 secret("KEYCLOAK_ADMIN_PASSWORD")
-secret("TLS_KEYSTORE_PASSWORD")
+secret("MQTT_PASSWORD_REED_BACKEND")
+for f in FACTORIES:
+    secret("MQTT_PASSWORD_" + upper(f["connector"]["name"]))  # the company's shop-floor devices
 for stale in ("IH_SUPERUSER_KEY", "REED_SUBMODEL_KEY"):  # from earlier layouts
     env.pop(stale, None)
 env["REED_DATA_KEYS"] = ",".join(f'{c["connector"]["name"]}=${{DATA_KEY_{upper(c["connector"]["name"])}}}' for c in CONNECTORS)
@@ -140,73 +143,6 @@ for c in CONNECTORS:
     ensure_keys(c["connector"]["name"])
 
 
-# ----------------------------------------------------------------- TLS
-# A local CA and one certificate per service host (SANs: host, localhost, 127.0.0.1) in deployment/tls/
-# (gitignored), mounted read-only at /tls in every container. Java runtimes trust the CA through
-# /tls/truststore.p12 (it holds only the REED CA, so a JVM trusts nothing else); EDC Jetty serves HTTPS on
-# every port from <host>.p12. Browsers and curl must trust deployment/tls/ca.crt.
-# The CA key stays outside the mounted directory (deployment/tls-ca.key, mode 600).
-# ponytail: a local CA; production uses certificates from the organisations' PKI / ACME.
-# Host: deployment/tls/ is mode 700, so its files are reachable only by the owner even though keys are
-# 644 (non-root container users - vault, nobody - must read their own key). Each container mounts only
-# its own key (tls_mount below).
-TLS_DIR, CA_KEY = DEP / "tls", DEP / "tls-ca.key"
-TRUSTSTORE_PASSWORD = "reed-trust"  # not a secret: the truststore holds only the public CA certificate
-TLS_HOSTS = (["vault", "postgres", "keycloak", "reed-backend", "litellm", "vllm", "dashboard", "issuerservice",
-              "federated-catalog"] + [f'{i["name"]}-ih' for i in IDENTITIES]
-             + [c["connector"]["name"] for c in CONNECTORS] + [f'{c["connector"]["name"]}-data' for c in CONNECTORS])
-
-
-def openssl(*args: str) -> None:
-    subprocess.run(["openssl", *args], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
-                   env={**os.environ, "TLS_KEYSTORE_PASSWORD": env["TLS_KEYSTORE_PASSWORD"]})
-
-
-def ensure_tls() -> None:
-    os.umask(0o077)  # keys are born owner-only; certificates are opened up explicitly below
-    TLS_DIR.mkdir(parents=True, exist_ok=True)
-    TLS_DIR.chmod(0o700)
-    ca_crt = TLS_DIR / "ca.crt"
-    if not ca_crt.exists():
-        openssl("req", "-x509", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:P-256", "-nodes",
-                "-keyout", str(CA_KEY), "-sha256", "-days", "3650", "-subj", "/O=REED Data Space/CN=REED local CA",
-                "-addext", "basicConstraints=critical,CA:TRUE", "-addext", "keyUsage=critical,keyCertSign,cRLSign",
-                "-out", str(ca_crt))
-        CA_KEY.chmod(0o600)
-        print("  generated the REED local CA (deployment/tls/ca.crt)")
-    trust = TLS_DIR / "truststore.p12"
-    if not trust.exists():
-        subprocess.run(["keytool", "-importcert", "-noprompt", "-storetype", "PKCS12", "-keystore", str(trust),
-                        "-storepass", TRUSTSTORE_PASSWORD, "-alias", "reed-ca", "-file", str(ca_crt)],
-                       check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    made = 0
-    for h in TLS_HOSTS:
-        key, crt, p12 = TLS_DIR / f"{h}.key", TLS_DIR / f"{h}.crt", TLS_DIR / f"{h}.p12"
-        if crt.exists() and key.exists() and p12.exists():
-            continue
-        ext, csr = TLS_DIR / f"{h}.ext", TLS_DIR / f"{h}.csr"
-        ext.write_text(f"subjectAltName=DNS:{h},DNS:localhost,IP:127.0.0.1\n"
-                       "keyUsage=critical,digitalSignature\nextendedKeyUsage=serverAuth,clientAuth\n")
-        openssl("req", "-new", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:P-256", "-nodes", "-keyout", str(key),
-                "-subj", f"/O=REED Data Space/CN={h}", "-out", str(csr))
-        openssl("x509", "-req", "-in", str(csr), "-CA", str(ca_crt), "-CAkey", str(CA_KEY), "-CAcreateserial",
-                "-CAserial", str(DEP / "tls-ca.srl"), "-days", "825", "-sha256", "-extfile", str(ext), "-out", str(crt))
-        openssl("pkcs12", "-export", "-in", str(crt), "-inkey", str(key), "-certfile", str(ca_crt), "-name", h,
-                "-out", str(p12), "-passout", "env:TLS_KEYSTORE_PASSWORD")
-        csr.unlink()
-        ext.unlink()
-        for f in (key, crt, p12):
-            f.chmod(0o644)
-        made += 1
-    ca_crt.chmod(0o644)
-    trust.chmod(0o644)
-    if made:
-        print(f"  generated {made} TLS certificate(s)")
-
-
-ensure_tls()
-
-
 # ----------------------------------------------------------------- confidential payloads
 # Each company's payloads live only with its own data service (deployment/payloads/<name>/, gitignored):
 # the supplier's ProcessCapability from its confidential capability in the roster, other classes from
@@ -230,7 +166,7 @@ for c in CONNECTORS:
 # ----------------------------------------------------------------- shared config fragments
 def vault_cfg(folder: str) -> str:
     # Token comes from the environment (EDC_VAULT_HASHICORP_TOKEN); it only grants secret/<folder>/*.
-    return f"""edc.vault.hashicorp.url=https://vault:8200
+    return f"""edc.vault.hashicorp.url=http://vault:8200
 edc.vault.hashicorp.folder={folder}
 edc.vault.hashicorp.health.check.enabled=false
 """
@@ -238,7 +174,7 @@ edc.vault.hashicorp.health.check.enabled=false
 
 def datasource(database: str, prefix: str = "default") -> str:
     # Password comes from the environment (EDC_DATASOURCE_<PREFIX>_PASSWORD).
-    return f"""edc.datasource.{prefix}.url=jdbc:postgresql://postgres:5432/{database}{PG_SSL}
+    return f"""edc.datasource.{prefix}.url=jdbc:postgresql://postgres:5432/{database}
 edc.datasource.{prefix}.user=reed
 """
 
@@ -256,9 +192,9 @@ def dcp(name: str) -> str:
     out = f"""
 # --- Decentralized Claims Protocol (DCP) ---
 edc.hostname={name}
-edc.iam.did.web.use.https=true
+edc.iam.did.web.use.https=false
 edc.iam.credential.revocation.mimetype=application/json
-edc.iam.sts.oauth.token.url=https://{name}-ih:7084/api/sts/token
+edc.iam.sts.oauth.token.url=http://{name}-ih:7084/api/sts/token
 edc.iam.sts.oauth.client.id={did(name)}
 edc.iam.sts.oauth.client.secret.alias={name}-sts-client-secret
 edc.iam.trustedissuer.reed.id={ISSUER_DID}
@@ -273,13 +209,6 @@ edc.iam.dcp.scopes.{scope}.type=DEFAULT
 edc.iam.dcp.scopes.{scope}.value=org.eclipse.dspace.dcp.vc.type:{vc}:read
 """
     return out
-
-
-def https(host: str) -> str:
-    # EDC Jetty: HTTPS on every web context; passwords from the environment.
-    return f"""edc.web.https.keystore.path={TLS}/{host}.p12
-edc.web.https.keystore.type=PKCS12
-"""
 
 
 def web(px: str, public: bool) -> str:
@@ -309,12 +238,12 @@ def connector_config(p: dict) -> str:
 edc.participant.id={did(name)}
 edc.runtime.id={name}
 
-{web(px, public=True)}{https(name)}
+{web(px, public=True)}
 # DSP callback: resolved connector-to-connector inside Docker -> service name.
-edc.dsp.callback.address=https://{name}:{px}194/protocol
+edc.dsp.callback.address=http://{name}:{px}194/protocol
 
 # Data-plane public API: called by browsers/scripts with an EDR -> localhost.
-edc.dataplane.api.public.baseurl=https://localhost:{px}291/public/
+edc.dataplane.api.public.baseurl=http://localhost:{px}291/public/
 edc.transfer.proxy.token.signer.privatekey.alias={name}-signing-key
 edc.transfer.proxy.token.verifier.publickey.alias={name}-verification-key
 
@@ -337,7 +266,7 @@ write(DEP / "federated-catalog" / "config.properties", f"""# GENERATED by tools/
 edc.participant.id={did("federated-catalog")}
 edc.runtime.id=federated-catalog
 
-{web(FC_PREFIX, public=False)}{https("federated-catalog")}
+{web(FC_PREFIX, public=False)}
 # Crawl every participant every 15 s (participants.json is re-read each cycle).
 edc.catalog.cache.execution.delay.seconds=5
 edc.catalog.cache.execution.period.seconds=15
@@ -352,12 +281,12 @@ web.http.management.auth.key.alias=federated-catalog-mgmt-api-key
 
 write(DEP / "federated-catalog" / "participants.json", json.dumps([
     {"name": c["connector"]["name"], "id": did(c["connector"]["name"]),
-     "url": f'https://{c["connector"]["name"]}:{c["connector"]["portPrefix"]}194/protocol/2025-1',
+     "url": f'http://{c["connector"]["name"]}:{c["connector"]["portPrefix"]}194/protocol/2025-1',
      "supportedProtocols": ["dataspace-protocol-http:2025-1"]} for c in CONNECTORS], indent=2) + "\n")
 
 
 # ----------------------------------------------------------------- identity services
-IDENTITY_COMMON = """edc.iam.did.web.use.https=true
+IDENTITY_COMMON = """edc.iam.did.web.use.https=false
 edc.iam.credential.revocation.mimetype=application/json
 edc.iam.accesstoken.jti.validation=true
 edc.encryption.aes.key.alias=aes-key-alias
@@ -369,9 +298,8 @@ for i in IDENTITIES:
     n = i["name"]
     write(DEP / "identityhub" / f"{n}.properties", f"""# GENERATED by tools/gen_topology.py - do not edit.
 # IdentityHub of {i["title"]}: its DID document, keys, verifiable credentials and STS.
-# {did(n)} -> https://{n}-ih:7083/{n}/did.json
+# {did(n)} -> http://{n}-ih:7083/{n}/did.json
 edc.hostname={n}-ih
-{https(f"{n}-ih")}
 web.http.port=7080
 web.http.path=/api
 web.http.identity.port=7081
@@ -391,7 +319,7 @@ write(DEP / "issuerservice" / "config.properties", f"""# GENERATED by tools/gen_
 # REED Issuer Service ({ISSUER_DID}): issues MembershipCredential, CertificationCredential and
 # SupplierRelationCredential from "database" attestations = the vc_* views in the REED backend DB.
 edc.hostname=issuerservice
-{https("issuerservice")}web.http.port=10010
+web.http.port=10010
 web.http.path=/api
 web.http.sts.port=10011
 web.http.sts.path=/api/sts
@@ -408,18 +336,11 @@ web.http.did.path=/
 web.http.statuslist.port=9999
 web.http.statuslist.path=/statuslist
 edc.issuer.statuslist.signing.key.alias=statuslist-signing-key
-# the status-list URL written into every credential (the default would be http://)
-edc.statuslist.callback.address=https://issuerservice:9999/statuslist
 {datasource("issuer")}# Attestation source: the REED registry (read-only views vc_membership, vc_certification, vc_supplier_relation)
 {datasource("reed", "reed")}{vault_cfg("issuer")}{IDENTITY_COMMON}""")
 
 databases = ["keycloak", "issuer"] + ["ih_" + db(i["name"]) for i in IDENTITIES] \
     + ["edc_" + db(c["connector"]["name"]) for c in CONNECTORS]
-write(DEP / "postgres" / "pg_hba.conf", """# GENERATED by tools/gen_topology.py - do not edit.
-# Inside the container: local socket (init scripts, healthcheck). Over the network: TLS only.
-local   all  all          trust
-hostssl all  all  all     scram-sha-256
-""")
 write(DEP / "postgres" / "init.sql", "-- GENERATED by tools/gen_topology.py. Runs once on first Postgres start.\n"
       + "".join(f"CREATE DATABASE {d};\n" for d in databases))
 
@@ -438,10 +359,10 @@ init_sh = """#!/bin/sh
 # ponytail: tokens get fixed ids from .env so EDC config can reference them; Vault then hashes those ids
 # with SHA-1 for lookups (it warns). Production: issue tokens via AppRole/Kubernetes auth instead.
 set -eu
-export VAULT_ADDR=https://vault:8200 VAULT_CACERT=/tls/ca.crt
+export VAULT_ADDR=http://vault:8200
 INIT=/vault/init/init.txt
 
-if ! vault operator init -status > /dev/null 2>&1; then
+if ! wget -qO- "$VAULT_ADDR/v1/sys/init" | grep -q '"initialized":true'; then
   vault operator init -key-shares=1 -key-threshold=1 > "$INIT"
   chmod 600 "$INIT"
   echo "Vault initialised."
@@ -491,25 +412,25 @@ storage "file" {
   path = "/vault/file"
 }
 listener "tcp" {
-  address       = "0.0.0.0:8200"
-  tls_cert_file = "/tls/vault.crt"
-  tls_key_file  = "/tls/vault.key"
+  address     = "0.0.0.0:8200"
+  tls_disable = 1
 }
-api_addr      = "https://vault:8200"
+api_addr      = "http://vault:8200"
 disable_mlock = true
 ui            = false
 """)
 
 # ----------------------------------------------------------------- dashboard config
 write(DEP / "dashboard" / "config.json", json.dumps({
-    "reedBackendUrl": "https://localhost:8081",
+    "reedBackendUrl": DASHBOARD_ORIGIN,  # proxied by the dashboard's nginx
     "keycloak": {"url": KEYCLOAK_URL, "realm": "reed", "clientId": "reed-dashboard"},
     "identityMode": "dcp",
     "connectors": [{
         "name": c["connector"]["name"], "bpn": c["bpn"], "company": c["name"], "short": c["short"],
         "participantId": did(c["connector"]["name"]),
-        "dspUrl": f'https://{c["connector"]["name"]}:{c["connector"]["portPrefix"]}194/protocol/2025-1',
-        "publicUrl": f'https://localhost:{c["connector"]["portPrefix"]}291/public/'} for c in CONNECTORS],
+        "dspUrl": f'http://{c["connector"]["name"]}:{c["connector"]["portPrefix"]}194/protocol/2025-1',
+        "publicUrl": f'http://localhost:{c["connector"]["portPrefix"]}291/public/',
+        "factory": bool(c.get("factory"))} for c in CONNECTORS],
 }, indent=2, ensure_ascii=False) + "\n")
 
 
@@ -610,29 +531,64 @@ def ports(*pairs: str) -> str:
     return "[" + ", ".join(f'"127.0.0.1:{p}"' for p in pairs) + "]"
 
 
-JAVA = f"""      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75 -Djavax.net.ssl.trustStore=/tls/truststore.p12 -Djavax.net.ssl.trustStoreType=PKCS12 -Djavax.net.ssl.trustStorePassword={TRUSTSTORE_PASSWORD}
+JAVA = """      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75
 """
-EDC_TLS = """      EDC_WEB_HTTPS_KEYSTORE_PASSWORD: ${TLS_KEYSTORE_PASSWORD}
-      EDC_WEB_HTTPS_KEYMANAGER_PASSWORD: ${TLS_KEYSTORE_PASSWORD}
-"""
-
-
-def tls_mount(host: str | None) -> str:
-    # Only the CA, the JVM truststore and the service's OWN certificate/key: a compromised container
-    # cannot read another service's key. On the host deployment/tls/ is mode 700 (owner only).
-    files = ["ca.crt", "truststore.p12"] + ([f"{host}.crt", f"{host}.key", f"{host}.p12"] if host else [])
-    return "".join(f"      - ./tls/{f}:/tls/{f}:ro\n" for f in files)
-
-
-def health(url: str) -> str:
-    return f'["CMD", "curl", "-fs", "--cacert", "/tls/ca.crt", "{url}"]'
 
 
 def edc_env(folder: str, extra: str = "") -> str:
     return f"""    environment:
       EDC_VAULT_HASHICORP_TOKEN: ${{VAULT_TOKEN_{upper(folder)}}}
       EDC_DATASOURCE_DEFAULT_PASSWORD: ${{POSTGRES_PASSWORD}}
-{extra}{EDC_TLS}{JAVA}"""
+{extra}{JAVA}"""
+
+
+# ----------------------------------------------------------------- MQTT broker (shop floor)
+# Mosquitto with a password per client. Each company's devices log in with the company's connector name
+# and may only publish under reed/factory/<company>/; the REED backend reads every line and publishes
+# alerts and operator observations. Passwords come from .env and are hashed when the broker starts.
+write(DEP / "mosquitto" / "mosquitto.conf", """# GENERATED by tools/gen_topology.py
+listener 1883
+allow_anonymous false
+password_file /mosquitto/data/passwd
+acl_file /mosquitto/config/acl
+persistence true
+persistence_location /mosquitto/data/
+# the backend has a persistent session: readings queue while it restarts (QoS 1)
+max_queued_messages 100000
+log_dest stdout
+""")
+write(DEP / "mosquitto" / "acl", """# GENERATED by tools/gen_topology.py
+# REED backend: reads every line's sensors, publishes alerts and operator observations
+user reed-backend
+topic readwrite reed/factory/#
+
+# a company's devices (username = its connector name) publish only under their own company
+pattern write reed/factory/%u/#
+""")
+MQTT_USERS = [("reed-backend", "MQTT_PASSWORD_REED_BACKEND")] + [
+    (f["connector"]["name"], "MQTT_PASSWORD_" + upper(f["connector"]["name"])) for f in FACTORIES]
+
+
+def factory_service(p: dict) -> str:
+    name = p["connector"]["name"]
+    return f"""
+  # {p["short"]}'s shop-floor devices (simulated demo line from the roster): sensors over MQTT.
+  {name}-factory:
+    image: reed/factory-sim:local
+    build:
+      context: ../services/factory-sim
+    container_name: reed-{name}-factory
+    depends_on:  # the backend's persistent MQTT session must exist before the history backfill
+      reed-backend:
+        condition: service_healthy
+    environment:
+      COMPANY: {name}
+      MQTT_PASSWORD: ${{MQTT_PASSWORD_{upper(name)}}}
+    mem_limit: 64m
+    volumes:
+      - ./roster.json:/app/roster.json:ro
+      - reed-factory-{name}:/state
+"""
 
 
 def identityhub_service(i: dict) -> str:
@@ -656,9 +612,9 @@ def identityhub_service(i: dict) -> str:
 {edc_env(n, f"      EDC_IH_API_SUPERUSER_KEY: ${{IH_KEY_{upper(n)}}}{chr(10)}")}    mem_limit: 1g
     volumes:
       - ./identityhub/{n}.properties:/app/config/config.properties:ro
-{tls_mount(f"{n}-ih")}    ports: {ports(f"{px}081:7081")}   # identity admin API (x-api-key), used by seed-identity.sh
+    ports: {ports(f"{px}081:7081")}   # identity admin API (x-api-key), used by seed-identity.sh
     healthcheck:
-      test: {health("https://127.0.0.1:7080/api/check/readiness")}
+      test: ["CMD", "curl", "-fs", "http://127.0.0.1:7080/api/check/readiness"]
       interval: 5s
       retries: 60
 """
@@ -683,7 +639,7 @@ def connector_service(p: dict) -> str:
 {edc_env(name)}    mem_limit: 1g
     volumes:
       - ./{name}/config.properties:/app/config/config.properties:ro
-{tls_mount(name)}    ports: {ports(f"{px}193:{px}193", f"{px}291:{px}291")}   # Management API (key-protected) + public data plane
+    ports: {ports(f"{px}193:{px}193", f"{px}291:{px}291")}   # Management API (key-protected) + public data plane
 
   # {p["short"]}'s own data service: holds its confidential payloads, releases them only to its data
   # plane, after a REED usage decision, stamped with a licence + watermark. Not published to the host.
@@ -698,14 +654,10 @@ def connector_service(p: dict) -> str:
     environment:
       COMPANY: {name}
       DATA_KEY: ${{DATA_KEY_{upper(name)}}}
-      REED_USAGE_URL: https://reed-backend:8080/reed/usage/decide
-      TLS_CERT: /tls/{name}-data.crt
-      TLS_KEY: /tls/{name}-data.key
-      TLS_CA: /tls/ca.crt
     mem_limit: 128m
     volumes:
       - ./payloads/{name}:/data:ro
-{tls_mount(f"{name}-data")}"""
+"""
 
 
 vault_env = "".join(f"      VAULT_TOKEN_{upper(n)}: ${{VAULT_TOKEN_{upper(n)}}}\n" for n in vault_identities) \
@@ -727,10 +679,10 @@ services:
     volumes:
       - ./vault-init/vault.hcl:/vault/config/vault.hcl:ro
       - reed-vault-data:/vault/file
-{tls_mount("vault")}    ports: {ports("8200:8200")}
+    ports: {ports("8200:8200")}
     healthcheck:
-      # healthy as soon as it answers, sealed or not (exit 2) - vault-init unseals it
-      test: ["CMD-SHELL", "VAULT_ADDR=https://127.0.0.1:8200 VAULT_CACERT=/tls/ca.crt vault status > /dev/null; [ $$? -ne 1 ]"]
+      # healthy as soon as it answers, sealed or not - vault-init unseals it
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8200/v1/sys/health?sealedcode=200&uninitcode=200"]
       interval: 2s
       retries: 30
 
@@ -746,25 +698,20 @@ services:
       - ./vault-init/init.sh:/init.sh:ro
       - ./vault/keys:/keys:ro
       - reed-vault-init:/vault/init
-{tls_mount(None)}    entrypoint: ["/bin/sh", "/init.sh"]
+    entrypoint: ["/bin/sh", "/init.sh"]
 
   # ---------- Postgres: REED registry, Keycloak, Issuer, every IdentityHub and connector ----------
   postgres:
     image: postgres:16-alpine
     container_name: reed-postgres
-    # the server key must belong to the postgres user with mode 600: copy it out of the read-only mount
-    entrypoint: ["sh", "-c", "install -o postgres -g postgres -m 600 /tls/postgres.key /var/lib/postgresql/server.key && exec docker-entrypoint.sh \\"$$@\\"", "--"]
-    command: ["postgres", "-c", "ssl=on", "-c", "ssl_cert_file=/tls/postgres.crt",
-              "-c", "ssl_key_file=/var/lib/postgresql/server.key", "-c", "hba_file=/etc/reed/pg_hba.conf"]
     environment:
       POSTGRES_DB: reed
       POSTGRES_USER: reed
       POSTGRES_PASSWORD: ${{POSTGRES_PASSWORD}}
     volumes:
       - reed-pgdata:/var/lib/postgresql/data
-      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
-      - ./postgres/pg_hba.conf:/etc/reed/pg_hba.conf:ro
-{tls_mount("postgres")}    ports: {ports("5432:5432")}
+      - ./postgres:/docker-entrypoint-initdb.d:ro
+    ports: {ports("5432:5432")}
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U reed -d reed"]
       interval: 2s
@@ -780,20 +727,18 @@ services:
         condition: service_healthy
     environment:
       KC_DB: postgres
-      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak{PG_SSL}
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
       KC_DB_USERNAME: reed
       KC_DB_PASSWORD: ${{POSTGRES_PASSWORD}}
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${{KEYCLOAK_ADMIN_PASSWORD}}
+      # ponytail: plain http on localhost; production terminates TLS here (KC_HTTPS_*) or at a proxy.
       KC_HOSTNAME: {KEYCLOAK_URL}
       KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
-      KC_HTTPS_CERTIFICATE_FILE: /tls/keycloak.crt
-      KC_HTTPS_CERTIFICATE_KEY_FILE: /tls/keycloak.key
-      KC_HTTP_ENABLED: "false"
-      KC_HTTP_MANAGEMENT_SCHEME: http   # health endpoint (port 9000) stays container-internal
+      KC_HTTP_ENABLED: "true"
     volumes:
       - ./keycloak/reed-realm.json:/opt/keycloak/data/import/reed-realm.json:ro
-{tls_mount("keycloak")}    ports: {ports("8180:8443")}
+    ports: {ports("8180:8080")}
     healthcheck:
       test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /health/ready HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q UP <&3"]
       interval: 5s
@@ -803,15 +748,13 @@ services:
   litellm:
     image: ghcr.io/berriai/litellm:main-v1.89.2
     container_name: reed-litellm
-    command: ["--config", "/app/config.yaml", "--port", "4000",
-              "--ssl_keyfile_path", "/tls/litellm.key", "--ssl_certfile_path", "/tls/litellm.crt"]
+    command: ["--config", "/app/config.yaml", "--port", "4000"]
     environment:
       LITELLM_MASTER_KEY: ${{LITELLM_MASTER_KEY}}
-      SSL_CERT_FILE: /tls/ca.crt   # trust the REED CA towards vLLM
     extra_hosts: ["host.docker.internal:host-gateway"]
     volumes:
       - ./litellm/config.yaml:/app/config.yaml:ro
-{tls_mount("litellm")}    ports: {ports("4000:4000")}
+    ports: {ports("4000:4000")}
 
   # Optional GPU backend (docker compose --profile vllm up): Qwen3.8 NVFP4 from the local HF cache.
   vllm:
@@ -827,12 +770,27 @@ services:
       HF_HUB_OFFLINE: "1"
     volumes:
       - ${{HOME}}/.cache/huggingface:/root/.cache/huggingface
-{tls_mount("vllm")}    command: ["--model", "nvidia/Qwen3.8-27B-NVFP4", "--served-model-name", "qwen3.8",
-              "--ssl-keyfile", "/tls/vllm.key", "--ssl-certfile", "/tls/vllm.crt",
+    command: ["--model", "nvidia/Qwen3.8-27B-NVFP4", "--served-model-name", "qwen3.8",
               "--max-model-len", "32768", "--gpu-memory-utilization", "0.45",
               "--enable-auto-tool-choice", "--tool-call-parser", "qwen3_coder", "--reasoning-parser", "qwen3"]
     ports: {ports("8000:8000")}
 
+  # ---------- MQTT broker (shop-floor sensors, alerts, operator observations) ----------
+  mosquitto:
+    image: eclipse-mosquitto:2.0.20
+    container_name: reed-mosquitto
+    entrypoint: ["sh", "-c", "set -e; umask 077; {"; ".join(f'mosquitto_passwd {"-c " if i == 0 else ""}-b /mosquitto/data/passwd {u} \\"$${k}\\"' for i, (u, k) in enumerate(MQTT_USERS))}; chown -R mosquitto:mosquitto /mosquitto/data; exec mosquitto -c /mosquitto/config/mosquitto.conf"]
+    environment:
+{"".join(f"      {k}: ${{{k}}}{chr(10)}" for _, k in MQTT_USERS)}    mem_limit: 64m
+    volumes:
+      - ./mosquitto:/mosquitto/config:ro
+      - reed-mosquitto-data:/mosquitto/data
+    ports: {ports("1883:1883")}
+    healthcheck:
+      test: ["CMD-SHELL", "mosquitto_pub -h 127.0.0.1 -u reed-backend -P \\"$$MQTT_PASSWORD_REED_BACKEND\\" -t reed/factory/health -n"]
+      interval: 5s
+      retries: 30
+{"".join(factory_service(p) for p in FACTORIES)}
   # ---------- REED backend ----------
   reed-backend:
     image: reed/backend:local
@@ -842,12 +800,12 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      mosquitto:
+        condition: service_healthy
       keycloak:
         condition: service_healthy
     environment:
-      REED_DB_URL: jdbc:postgresql://postgres:5432/reed{PG_SSL}
-      SERVER_SSL_CERTIFICATE: file:/tls/reed-backend.crt
-      SERVER_SSL_CERTIFICATE_PRIVATE_KEY: file:/tls/reed-backend.key
+      REED_DB_URL: jdbc:postgresql://postgres:5432/reed
       REED_DB_USER: reed
       REED_DB_PASSWORD: ${{POSTGRES_PASSWORD}}
       REED_MGMT_KEYS: ${{REED_MGMT_KEYS}}
@@ -856,12 +814,15 @@ services:
       REED_DID_PATTERN: "did:web:{{name}}-ih%3A7083:{{name}}"
       REED_LLM_API_KEY: ${{LITELLM_MASTER_KEY}}
       REED_LLM_MODEL: ${{REED_LLM_MODEL:-reed-llm}}
+      REED_ISSUER: {KEYCLOAK_URL}/realms/reed
+      REED_CORS_ORIGINS: {DASHBOARD_ORIGIN}
+      REED_MQTT_PASSWORD: ${{MQTT_PASSWORD_REED_BACKEND}}
 {JAVA}    volumes:
       - ./roster.json:/app/deployment/roster.json:ro
       - ./scenarios:/app/deployment/scenarios:ro
-{tls_mount("reed-backend")}    ports: {ports("8081:8080")}
+    ports: {ports("8081:8080")}
     healthcheck:
-      test: {health("https://127.0.0.1:8080/reed/health")}
+      test: ["CMD", "curl", "-fs", "http://127.0.0.1:8080/reed/health"]
       interval: 5s
       retries: 60
 
@@ -879,9 +840,9 @@ services:
 {edc_env("issuer", "      EDC_IH_API_SUPERUSER_KEY: ${ISSUER_KEY}" + chr(10) + "      EDC_DATASOURCE_REED_PASSWORD: ${POSTGRES_PASSWORD}" + chr(10))}    mem_limit: 1g
     volumes:
       - ./issuerservice/config.properties:/app/config/config.properties:ro
-{tls_mount("issuerservice")}    ports: {ports("10013:10013", "10015:10015")}   # issuer admin + identity APIs (x-api-key)
+    ports: {ports("10013:10013", "10015:10015")}   # issuer admin + identity APIs (x-api-key)
     healthcheck:
-      test: {health("https://127.0.0.1:10010/api/check/readiness")}
+      test: ["CMD", "curl", "-fs", "http://127.0.0.1:10010/api/check/readiness"]
       interval: 5s
       retries: 60
 {"".join(identityhub_service(i) for i in IDENTITIES)}{"".join(connector_service(c) for c in CONNECTORS)}
@@ -898,11 +859,11 @@ services:
         condition: service_healthy
 {"".join(f"      {c['connector']['name']}:{chr(10)}        condition: service_started{chr(10)}" for c in CONNECTORS)}    environment:
       EDC_VAULT_HASHICORP_TOKEN: ${{VAULT_TOKEN_FEDERATED_CATALOG}}
-{EDC_TLS}{JAVA}    mem_limit: 1g
+{JAVA}    mem_limit: 1g
     volumes:
       - ./federated-catalog/config.properties:/app/config/config.properties:ro
       - ./federated-catalog/participants.json:/app/config/participants.json:ro
-{tls_mount("federated-catalog")}    ports: {ports(f"{FC_PREFIX}193:{FC_PREFIX}193")}
+    ports: {ports(f"{FC_PREFIX}193:{FC_PREFIX}193")}
 
   # ---------- REED Dashboard (React SPA; login via Keycloak) ----------
   dashboard:
@@ -913,12 +874,13 @@ services:
     ports: {ports("8088:8080")}
     volumes:
       - ./dashboard/config.json:/usr/share/nginx/html/config.json:ro
-{tls_mount("dashboard")}
+
 volumes:
   reed-pgdata:
   reed-vault-data:
   reed-vault-init:
-"""
+  reed-mosquitto-data:
+{"".join(f"  reed-factory-{p['connector']['name']}:{chr(10)}" for p in FACTORIES)}"""
 write(DEP / "docker-compose.yml", compose)
 print(f"topology: {len(CONNECTORS)} connectors, {len(IDENTITIES)} identities (each with its own IdentityHub), "
       f"{len(PARTICIPANTS)} participants, {len(users)} demo users")

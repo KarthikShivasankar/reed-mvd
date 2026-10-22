@@ -8,6 +8,7 @@ package org.example.reed;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
  * REED backend: source of truth for the REED manufacturing data space.
@@ -17,6 +18,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * payloads that the seed step pushes into the {@code reed-provider} connector.
  */
 @SpringBootApplication
+@EnableScheduling  // shop-floor trend analysis + reading retention (factory)
 public class ReedBackendApplication {
     public static void main(String[] args) {
         SpringApplication.run(ReedBackendApplication.class, args);

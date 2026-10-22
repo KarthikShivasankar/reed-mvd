@@ -75,7 +75,30 @@
         { "buyer": "BPN-REED-OEM-0001", "onTime": true, "qualityOk": true },
         { "buyer": "BPN-REED-OEM-0002", "onTime": false, "qualityOk": true }
       ],
-      "users": [{ "username": "castellum-engineer", "roles": ["supplier-engineer"] }]
+      "users": [{ "username": "castellum-engineer", "roles": ["supplier-engineer"] }],
+      "factory": {
+        "name": "Bilbao demo casting line (simulated)",
+        "machines": [
+          { "id": "furnace-1", "name": "Induction furnace 1", "sensors": [
+            { "id": "melt-temp", "name": "Melt temperature", "unit": "°C", "nominal": 1450, "lo": 1380, "hi": 1520, "noise": 4,
+              "action": "Hold tapping and correct the furnace power setpoint" },
+            { "id": "power", "name": "Furnace power", "unit": "kW", "nominal": 2400, "lo": 0, "hi": 3000, "noise": 40, "dailyAmp": 150,
+              "action": "Check the melt charge and the converter" },
+            { "id": "shell-temp", "name": "Shell temperature", "unit": "°C", "nominal": 85, "hi": 140, "noise": 1.5,
+              "driftPerHour": 6, "cycleHours": 12, "action": "Inspect refractory lining wear and plan a relining slot" }
+          ] },
+          { "id": "moulding-1", "name": "Moulding line", "sensors": [
+            { "id": "sand-moisture", "name": "Sand moisture", "unit": "%", "nominal": 3.2, "lo": 2.6, "hi": 3.9, "noise": 0.06, "dailyAmp": 0.15,
+              "action": "Adjust water dosing at the sand mixer" },
+            { "id": "cycle-time", "name": "Cycle time", "unit": "s", "nominal": 48, "hi": 60, "noise": 1.2,
+              "action": "Check pattern change and mould handling for hold-ups" }
+          ] },
+          { "id": "fettling-1", "name": "Fettling CNC", "sensors": [
+            { "id": "spindle-vibration", "name": "Spindle vibration", "unit": "mm/s", "nominal": 2.2, "hi": 7.1, "noise": 0.15,
+              "driftPerHour": 0.9, "cycleHours": 8, "action": "Inspect spindle bearings and lubrication (ISO 10816 zone limit 7.1 mm/s)" }
+          ] }
+        ]
+      }
     },
     {
       "bpn": "BPN-REED-SUP-0003",
@@ -114,7 +137,22 @@
         { "buyer": "BPN-REED-OEM-0002", "onTime": true, "qualityOk": true },
         { "buyer": "BPN-REED-OEM-0002", "onTime": true, "qualityOk": true }
       ],
-      "users": [{ "username": "wisla-engineer", "roles": ["supplier-engineer"] }]
+      "users": [{ "username": "wisla-engineer", "roles": ["supplier-engineer"] }],
+      "factory": {
+        "name": "Gdańsk demo machining cell (simulated)",
+        "machines": [
+          { "id": "vtl-1", "name": "Vertical turning lathe", "sensors": [
+            { "id": "spindle-vibration", "name": "Spindle vibration", "unit": "mm/s", "nominal": 1.8, "hi": 7.1, "noise": 0.12,
+              "action": "Inspect spindle bearings and lubrication (ISO 10816 zone limit 7.1 mm/s)" },
+            { "id": "coolant-temp", "name": "Coolant temperature", "unit": "°C", "nominal": 24, "lo": 18, "hi": 32, "noise": 0.3,
+              "dailyAmp": 2, "driftPerHour": 0.5, "cycleHours": 16, "action": "Check the chiller and coolant concentration" }
+          ] },
+          { "id": "cmm-1", "name": "CMM", "sensors": [
+            { "id": "flatness-dev", "name": "Flatness deviation", "unit": "mm", "nominal": 0.03, "hi": 0.1, "noise": 0.008,
+              "action": "Re-check fixture clamping and thermal compensation" }
+          ] }
+        ]
+      }
     },
     {
       "bpn": "BPN-REED-SUP-0004",

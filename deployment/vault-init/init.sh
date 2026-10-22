@@ -10,10 +10,10 @@
 # ponytail: tokens get fixed ids from .env so EDC config can reference them; Vault then hashes those ids
 # with SHA-1 for lookups (it warns). Production: issue tokens via AppRole/Kubernetes auth instead.
 set -eu
-export VAULT_ADDR=https://vault:8200 VAULT_CACERT=/tls/ca.crt
+export VAULT_ADDR=http://vault:8200
 INIT=/vault/init/init.txt
 
-if ! vault operator init -status > /dev/null 2>&1; then
+if ! wget -qO- "$VAULT_ADDR/v1/sys/init" | grep -q '"initialized":true'; then
   vault operator init -key-shares=1 -key-threshold=1 > "$INIT"
   chmod 600 "$INIT"
   echo "Vault initialised."
