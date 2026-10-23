@@ -182,6 +182,7 @@ docs/                               architecture, identity, matchmaking, data mo
 - [docs/reed-data-model.md](docs/reed-data-model.md) - tables, asset classes, the three policy layers
 - [docs/connectors-and-protocols.md](docs/connectors-and-protocols.md) - ports, endpoints, who talks to whom
 - [docs/add-participant.md](docs/add-participant.md) - onboarding a company (edit the roster, regenerate)
+- [docs/walkthrough.md](docs/walkthrough.md) - hands-on test walkthrough with what happens underneath (identity, policies, contracts, shop floor)
 - [docs/dashboard-guide.md](docs/dashboard-guide.md) - a walkthrough of the UI
 - [RUN.md](RUN.md) - operations: rebuilds, troubleshooting
 
