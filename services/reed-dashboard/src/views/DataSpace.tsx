@@ -38,7 +38,7 @@ export function DataSpace({ ctx }: { ctx: Ctx }) {
   if (!as) {
     return (
       <>
-        <Head />
+        <Head companies={companies} byBpn={byBpn} />
         <div className="empty">Your organisation runs no EDC connector yet: you can be matched, but data is shared connector to connector.</div>
       </>
     );
@@ -46,7 +46,7 @@ export function DataSpace({ ctx }: { ctx: Ctx }) {
 
   return (
     <>
-      <Head />
+      <Head companies={companies} byBpn={byBpn} />
       <Explainer help={TAB_HELP.dataspace} />
       <div className="controls">
         <div className="seg" role="tablist" aria-label="Data space">
@@ -72,11 +72,12 @@ export function DataSpace({ ctx }: { ctx: Ctx }) {
   );
 }
 
-function Head() {
+function Head({ companies, byBpn }: { companies: ConnectorRef[]; byBpn: Record<string, Participant> }) {
+  const countries = new Set(companies.map((c) => byBpn[c.bpn]?.country).filter(Boolean)).size;
   return (
     <div className="view-head">
       <h1>Data space</h1>
-      <p className="muted">Seven companies in five European countries share data connector to connector. Each owner decides who finds its data
+      <p className="muted">{companies.length} companies{countries > 0 && ` in ${countries} European countries`} share data connector to connector. Each owner decides who finds its data
         and who gets a contract; every connector checks those terms against the requester's verifiable credentials.</p>
     </div>
   );

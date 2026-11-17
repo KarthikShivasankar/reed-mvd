@@ -6,7 +6,7 @@ ROSTER="$ROOT/deployment/roster.json"
 set -a; # shellcheck disable=SC1091
 source "$ROOT/deployment/.env"; set +a
 REED_BACKEND="${REED_BACKEND:-http://localhost:8081}"
-KEYCLOAK="${KEYCLOAK:-http://localhost:8180}"
+KEYCLOAK="${KEYCLOAK:-http://localhost:${REED_KEYCLOAK_PORT:-8180}}"  # host port: REED_KEYCLOAK_PORT in .env
 DEMO_PASSWORD="$(jq -r .dataspace.demoPassword "$ROSTER")"
 CTX='["https://w3id.org/edc/connector/management/v2"]'   # Management API v4 (CEL rules: v5beta)
 QS='{"@context":["https://w3id.org/edc/connector/management/v2"],"@type":"QuerySpec","limit":500}'

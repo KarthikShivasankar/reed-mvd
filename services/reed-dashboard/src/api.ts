@@ -572,7 +572,8 @@ export function policyReason(detail?: string): string {
 
 /* ----------------------------- helpers --------------------------------- */
 export function datasetsOf(catalog: any): any[] {
-  const ds = catalog?.dataset ?? catalog?.["dcat:dataset"] ?? [];
+  // connector catalogs arrive compacted; the federated catalog's are expanded JSON-LD (full IRIs)
+  const ds = catalog?.dataset ?? catalog?.["dcat:dataset"] ?? catalog?.["http://www.w3.org/ns/dcat#dataset"] ?? [];
   return Array.isArray(ds) ? ds : [ds];
 }
 

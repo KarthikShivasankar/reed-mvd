@@ -743,7 +743,7 @@ services:
       KC_HTTP_ENABLED: "true"
     volumes:
       - ./keycloak/reed-realm.json:/opt/keycloak/data/import/reed-realm.json:ro
-    ports: {ports("8180:8080")}
+    ports: {ports("${REED_KEYCLOAK_PORT:-8180}:8080")}
     healthcheck:
       test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /health/ready HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q UP <&3"]
       interval: 5s
@@ -764,7 +764,7 @@ services:
     extra_hosts: ["host.docker.internal:host-gateway"]
     volumes:
       - ./litellm/config.yaml:/app/config.yaml:ro
-    ports: {ports("4000:4000")}
+    ports: {ports("${REED_LITELLM_PORT:-4000}:4000")}
 
   # Optional GPU backend (docker compose --profile vllm up): Qwen3.8 NVFP4 from the local HF cache.
   vllm:

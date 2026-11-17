@@ -37,6 +37,7 @@ docker compose -f deployment/docker-compose.yml up --build -d    # --profile vll
 ./run-persistence.sh               # down + up with volumes kept: nothing may need re-seeding
 ./run-factory.sh                   # shop floor: MQTT auth/ACL, live stream, history, observations, briefing, scoping, fault -> alarm
 ./run-interop.sh                   # every connector x every other: catalogues + contracts match PolicyEvaluator; 8 stories (SCENARIO=X2)
+node tools/demo-video/walkthrough.mjs   # narrated videos (also tutorial.mjs; fresh seeded stack, piper TTS via PIPER_PY/PIPER_VOICE), then mix.py + review.py <out dir>
 ./gradlew :services:reed-backend:test                          # scorer, fixtures, assistant guardrails
 cd services/reed-dashboard && npx playwright test              # UI e2e (stack must be up + seeded)
 docker compose -f deployment/docker-compose.yml down -v        # -v drops Vault + Postgres (seed again)
@@ -169,7 +170,7 @@ use `localhost`. Everything is plain http. The browser has one origin, `http://1
 upgrades): the dashboard's nginx proxies Keycloak (`/realms`, `/resources`, `/admin`; `KC_HOSTNAME` is that
 origin, and so is the backend's token issuer), the backend (`/reed`) and connector data planes
 (`/dp/<name>:<port>/public/`, rewritten from EDR endpoints in `api.ts`). Scripts use the direct ports.
-Dashboard 8088, Keycloak 8180, backend 8081, LiteLLM 4000, vLLM 8000,
+Dashboard 8088, Keycloak 8180, backend 8081, LiteLLM 4000 (host ports of the last two: `REED_KEYCLOAK_PORT` / `REED_LITELLM_PORT` in `.env`), vLLM 8000,
 IdentityHub admin `<prefix>081`, Issuer admin 10013/10015, Vault 8200, Postgres 5432, MQTT 1883.
 
 ### Dashboard (`services/reed-dashboard/`)

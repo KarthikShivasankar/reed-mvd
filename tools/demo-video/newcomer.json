@@ -1,0 +1,38 @@
+    {
+      "bpn": "BPN-REED-SUP-0013",
+      "name": "Kvarken Forgeworks Oy",
+      "short": "Kvarken",
+      "role": "SUPPLIER",
+      "country": "FI",
+      "city": "Vaasa",
+      "vatId": "FI00000013",
+      "lat": 63.10,
+      "lon": 21.62,
+      "portAccess": true,
+      "railAccess": true,
+      "sectors": ["offshore", "wind", "heavy-machinery"],
+      "connector": { "name": "kvarken", "portPrefix": "46" },
+      "attestations": ["ISO9001", "DNV"],
+      "relations": [{ "type": "SUPPLIES", "to": "BPN-REED-OEM-0002" }],
+      "capability": {
+        "summary": "Open-die forging of shafts, rings and flanges up to 60 t, with heat treatment and rough machining.",
+        "processes": ["open-die-forging", "ring-rolling", "heat-treatment", "rough-machining"],
+        "materials": ["42CrMo4", "34CrNiMo6", "S355"],
+        "envelopeMm": [12000, 2500, 2500],
+        "maxMassKg": 60000,
+        "bestTolMm": 0.5,
+        "leadTimeWeeks": 16,
+        "capacity": "MEDIUM",
+        "co2KgPerKg": 0.8,
+        "claimedCerts": ["ISO9001", "DNV"]
+      },
+      "confidentialCapability": {
+        "machines": ["8,000 t open-die press", "Ring mill 6 m", "Gas quench furnace 14 m"],
+        "envelopeMm": [12000, 2500, 2500],
+        "maxMassKg": 60000,
+        "bestTolMm": 0.5,
+        "leadTimeWeeks": 16
+      },
+      "assets": ["ProcessCapability", "QualityEvidence"],
+      "users": [{ "username": "kvarken-engineer", "roles": ["supplier-engineer", "data-steward"] }]
+    },

@@ -133,6 +133,8 @@ function EdcState({ state }: { state?: string }) {
 export function EdcCatalog({ ctx }: { ctx: Ctx }) {
   const { data, error, loading, reload } = useAsync(() => ctx.api.federatedCatalog(), [ctx.api]);
   const short = (did?: string) => ctx.config.connectors.find((c) => c.participantId === did)?.company ?? did ?? "—";
+  // the federated catalog returns expanded JSON-LD: the participant id is a full IRI holding {"@id": did}
+  const pid = (cat: any): string | undefined => cat.participantId ?? cat["https://w3id.org/dspace/2025/1/participantId"]?.["@id"];
   return (
     <>
       <Head title="EDC catalog" lede="What the federated catalog crawled from every member's connector, using the operator's own credentials. Metadata only." />
@@ -142,8 +144,8 @@ export function EdcCatalog({ ctx }: { ctx: Ctx }) {
                 emptyText="Nothing crawled yet. Seed the connectors (./seed-reed.sh) and wait about 15 seconds.">
           <div className="fc">
             {data?.map((cat) => (
-              <div key={cat.participantId ?? cat["@id"]} className="fc-member">
-                <h3 className="h-small">{short(cat.participantId)}</h3>
+              <div key={pid(cat) ?? cat["@id"]} className="fc-member">
+                <h3 className="h-small">{short(pid(cat))}</h3>
                 <table className="grid compact">
                   <tbody>
                     {datasetsOf(cat).map((d) => (
@@ -167,7 +169,7 @@ export function EdcCatalog({ ctx }: { ctx: Ctx }) {
 /* ----------------------------------------------------------------- Audit */
 const EVENT_TEXT: Record<string, string> = {
   CLASSIFY: "Classified", DISCOVER: "Discovered", REQUEST: "Requested", NEGOTIATE: "Negotiated",
-  PULL: "Payload pulled", MATCH: "Matchmaking", ASSIST: "Assistant",
+  PULL: "Payload pulled", MATCH: "Matchmaking", ASSIST: "Assistant", POLICY: "Terms changed",
 };
 
 export function Audit({ ctx }: { ctx: Ctx }) {
