@@ -84,10 +84,11 @@ negotiate() {
   echo "$neg"
 }
 
-# pull <consumer> <provider> <agreementId> -> payload (HttpData-PULL transfer + EDR + data-plane GET)
+# edr <consumer> <provider> <agreementId> -> {endpoint, authorization} (HttpData-PULL transfer started, EDR delivered)
+# pull <consumer> <provider> <agreementId> -> payload (edr + data-plane GET)
 # The transfer is started through the REED backend relay, which registers the transfer.process.started
 # callback; the consumer connector then delivers the EDR to the backend (no EDR-cache polling).
-pull() {
+edr() {
   local c=$1 p=$2 agr=$3 tp st edr admin
   admin=$(token reed-admin)
   tp=$(api "$admin" POST "/reed/connectors/$c/v4/transferprocesses" '{"@context": '"$CTX"', "@type": "TransferRequest",
@@ -104,5 +105,10 @@ pull() {
     [[ $(status) == 200 ]] && break
     sleep 1
   done
+  echo "$edr"
+}
+
+pull() {
+  local edr; edr=$(edr "$@") || return 1
   curl -fsS "$(jq -r .endpoint <<<"$edr")" -H "Authorization: $(jq -r .authorization <<<"$edr")"
 }

@@ -68,6 +68,16 @@
       "factory": false
     },
     {
+      "name": "nordic",
+      "bpn": "BPN-REED-SUP-0013",
+      "company": "Nordic Manufacturing Provider AS",
+      "short": "Nordic",
+      "participantId": "did:web:nordic-ih%3A7083:nordic",
+      "dspUrl": "http://nordic:46194/protocol/2025-1",
+      "publicUrl": "http://localhost:46291/public/",
+      "factory": true
+    },
+    {
       "name": "komatsu",
       "bpn": "BPN-REED-OEM-0003",
       "company": "Komatsu Mining Germany GmbH",

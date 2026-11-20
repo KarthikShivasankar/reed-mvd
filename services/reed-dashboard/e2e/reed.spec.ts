@@ -244,3 +244,73 @@ test("toy factory: a fault sent from the dashboard raises an alarm in real time,
   await expect(page.locator(".toast.ok").last()).toContainText("maintenance on Fettling CNC");
   await expect(page.locator(".tile", { hasText: "Spindle vibration" })).not.toContainText("Alarm", { timeout: 180_000 });
 });
+
+test("service RFQ: capability and policy judged apart; the contract's policy is enforced by the provider's Open Policy Agent", async ({ page }) => {
+  const post = async () => {
+    await page.getByRole("button", { name: "Request a capability" }).click();
+    await page.getByLabel("Title").fill("Pilot batch: precision housings");
+    await page.getByLabel("Technical requirements (keywords)").fill("5-axis, titanium");
+    await page.getByRole("button", { name: "Post and match" }).click();
+    return page.locator('.match3[data-offering="precision-cnc-nordic"]');
+  };
+
+  // Buyer B: the capability fits, one policy condition does not
+  await login(page, "nordvind-buyer", "service");
+  let card = await post();
+  await expect(card.locator("section").nth(0)).toContainText("TRUE");
+  await expect(card.locator("section").nth(1)).toContainText("FALSE");
+  await expect(card.locator("section").nth(1).locator("li.fail")).toHaveText(/Requester is not a competing organisation/);
+  await expect(card.locator("section").nth(1).locator("li.fail")).toHaveCount(1);
+  await expect(card.locator(".match3-final")).toContainText("Not eligible: Requester is not a competing organisation.");
+  await expect(card.getByRole("button", { name: "Select this provider" })).toHaveCount(0);
+
+  // Buyer A: eligible, selects, concludes the contract
+  await login(page, "hanse-buyer", "service");
+  card = await post();
+  await expect(card.locator(".match3-final")).toContainText("Eligible");
+  await card.getByRole("button", { name: "Select this provider" }).click();
+  await expect(page.locator(".view-head h1")).toContainText("DRAFT");
+  await expect(page.locator(".effective")).toContainText("Requester is not a competing organisation AND");
+  await expect(page.locator(".effective")).toContainText("Requester is Hanse AND");
+  await page.locator(".policy-code", { hasText: "Generated Rego" }).locator("summary").click();
+  await expect(page.locator(".policy-code", { hasText: "Generated Rego" }).locator("pre")).toContainText("input.requester.competitor == false");
+  await page.getByRole("button", { name: "Accept the terms and conclude the contract" }).click();
+  await expect(page.locator(".view-head h1")).toContainText("ACTIVE", { timeout: 120_000 });
+  await expect(page.locator(".rail li.done")).toHaveCount(10);  // everything up to "Deployed to connector"
+  await expect(page.locator(".rail")).toContainText("http://nordic-opa:8181");
+
+  try {
+    // runtime: another purpose than agreed is denied by the provider's OPA, the agreed one is allowed
+    await page.getByLabel("Declared purpose").selectOption("production");
+    await page.getByRole("button", { name: "Request the data" }).click();
+    await expect(page.getByTestId("request-result")).toContainText("Declared purpose is pilot-evaluation", { timeout: 120_000 });
+    await page.getByLabel("Declared purpose").selectOption("pilot-evaluation");
+    await page.getByRole("button", { name: "Request the data" }).click();
+    await expect(page.getByTestId("request-result")).toContainText("ALLOW", { timeout: 120_000 });
+    await expect(page.locator(".rail li.done")).toHaveCount(12);
+    await expect(page.locator(".decisions")).toContainText("DENY");
+
+    // a simulated request after the contract period
+    const later = new Date(Date.now() + 120 * 864e5).toISOString().slice(0, 10);
+    await page.getByLabel("Simulated date (today if empty)").fill(later);
+    await page.getByRole("button", { name: "Ask" }).click();
+    await expect(page.getByTestId("sim-result")).toContainText("DENY");
+    await expect(page.getByTestId("sim-result").locator("li.fail")).toHaveCount(2);  // period over, so no active contract
+
+    // the operator follows the same policy from definition to enforcement
+    const contract = page.url().split("/").pop()!;
+    await login(page, "reed-admin", "operator");
+    await page.getByRole("tab", { name: "Connectors" }).click();
+    await expect(page.locator("tr", { hasText: "nordic" }).first()).toContainText("online");
+    await page.getByRole("tab", { name: "Policy decisions" }).click();
+    await expect(page.locator("tr", { hasText: contract }).filter({ hasText: "Runtime" }).first()).toContainText("http://nordic-opa:8181");
+    await page.getByRole("tab", { name: "Contracts" }).click();
+    await page.getByRole("link", { name: contract }).click();
+    await expect(page.locator(".rail li.done")).toHaveCount(12);
+  } finally {
+    await login(page, "hanse-buyer", "agreements");
+    await page.locator("tr", { hasText: "ACTIVE" }).first().click();
+    await page.getByRole("button", { name: "Terminate the contract" }).click();
+    await expect(page.locator(".view-head h1")).toContainText("TERMINATED");
+  }
+});

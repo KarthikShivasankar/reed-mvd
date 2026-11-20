@@ -287,17 +287,43 @@ api "$(token nordvind-quality)" PUT /reed/assets/bill-of-material-nordvind/polic
   '{"discoverability":"consortium","policyTemplate":"consortium-only"}'; status   # 403
 ```
 
+## 8. Policy-aware matchmaking, contracts and Open Policy Agent
+
+Full description: `docs/policy-enforcement.md`. Automated: `./run-policy.sh`.
+
+1. **Log in as `nordic-engineer`**, open **Capabilities**. "Precision CNC Manufacturing" shows its
+   five policy components, the effective combination and, under the two disclosures, the ODRL
+   policy and the generated Rego. "Register a capability" lets you compose another policy.
+2. **Log in as `nordvind-buyer`**, open **Service RFQs**, "Request a capability", post it with the
+   defaults (cnc-machining, purpose pilot-evaluation). Nordic's card says capability TRUE, policy
+   FALSE: "Requester is not a competing organisation". There is no select button.
+3. **Log in as `hanse-buyer`**, post the same request. All conditions hold: "Select this provider".
+4. On the contract page read the terms (nine conditions now: the provider's five AND buyer AND
+   period AND purpose), then "Accept the terms and conclude the contract". The status goes
+   DRAFT, NEGOTIATING, AGREED, ACTIVE and the lifecycle rail lights up to "Deployed to connector".
+5. "Request the data" with purpose `production`: refused, "Declared purpose is pilot-evaluation".
+   With `pilot-evaluation`: ALLOW, and the payload carries the CNC cell's machine status.
+6. "Simulated request" with a date after the period: DENY, two conditions.
+7. **Log in as `reed-admin`**, open **Operator**: members (suspend Hanse and repeat step 5: denied),
+   connectors with their decision points, and "Policy decisions" with every condition per row.
+
+Under the hood: the match asked `reed-opa`; the contract's Rego was put into `nordic-opa`; each
+request went Hanse connector -> Nordic data plane -> `nordic-data`, which asked REED for the
+request context, asked `nordic-opa` for the decision, reported it, and only then released the
+payload. `docker logs reed-nordic-data` shows the three calls.
+
 ## Automated tests
 
 | Command | Proves | Time |
 |---|---|---|
-| `./gradlew :services:reed-backend:test` | scorer, scenario fixtures, assistant guardrails, `TrendAnalyzer`, `PolicyEvaluator`, licences | 1 min |
+| `./gradlew :services:reed-backend:test` | scorer, scenario fixtures, assistant guardrails, `TrendAnalyzer`, `PolicyEvaluator`, licences, ODRL → Rego, offering matcher | 1 min |
 | `./run-transfer.sh` | DCP contract + EDR pull + watermark; 2 credential refusals; the relay cannot be abused | 1 min |
 | `./run-matchmaking.sh` | 11 RFQs end to end, contract-backed confirm | 3 min |
 | `./run-factory.sh` | MQTT auth + ACL, live stream, history, analysis, LLM tagging without personal data, briefing, scoping, spike → alarm → maintenance | 4 min |
 | `./run-interop.sh` | every company pair's catalogue and contracts match the evaluator; 8 stories; who may set terms | 5 min |
+| `./run-policy.sh` | onboarding attributes decide eligibility; capability vs policy match; contract; Rego in the provider's OPA; ALLOW and five DENY cases; decision log | 2 min |
 | `./run-persistence.sh` | `down` + `up` with volumes kept: nothing needs re-seeding | 3 min |
-| `cd services/reed-dashboard && npx playwright test` | 12 browser tests incl. owner publish → connector refusal, live Get it, toy-factory alarm | 3 min |
+| `cd services/reed-dashboard && npx playwright test` | 13 browser tests incl. owner publish → connector refusal, live Get it, toy-factory alarm, service contract enforced by OPA | 3 min |
 
 All print `PASS`/`FAIL` lines and exit non-zero on failure.
 

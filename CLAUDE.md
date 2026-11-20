@@ -36,6 +36,7 @@ docker compose -f deployment/docker-compose.yml up --build -d    # --profile vll
 ./run-matchmaking.sh               # 11 scenarios (SCENARIO=K1 for one)
 ./run-persistence.sh               # down + up with volumes kept: nothing may need re-seeding
 ./run-factory.sh                   # shop floor: MQTT auth/ACL, live stream, history, observations, briefing, scoping, fault -> alarm
+./run-policy.sh                    # capability vs policy match, contract, ODRL -> Rego -> each company's OPA: ALLOW + DENY cases
 ./run-interop.sh                   # every connector x every other: catalogues + contracts match PolicyEvaluator; 8 stories (SCENARIO=X2)
 node tools/demo-video/walkthrough.mjs   # narrated videos (also tutorial.mjs; fresh seeded stack, piper TTS via PIPER_PY/PIPER_VOICE), then mix.py + review.py <out dir>
 ./gradlew :services:reed-backend:test                          # scorer, fixtures, assistant guardrails
@@ -162,8 +163,31 @@ Spring Boot 3.3 + Postgres, schema by **Flyway** (`db/migration`, Hibernate `val
 - Live data product: the usage decision for a `ProductionStatus` asset of a company with a line returns
   `shopFloor` (`FactoryService.summary`), which its data service puts into the payload before watermarking.
 
+### Policy-aware MaaS: ODRL -> Rego -> OPA - see `docs/policy-enforcement.md`
+- Four moments, four pieces of code: design time (`offering/OfferingService`: a capability offering + compound ODRL
+  policy), matchmaking time (`OfferingService.matches`: pure `OfferingMatcher` capability checks, then eligibility asked of
+  `reed-opa`), contract time (`contract/ContractService`: effective policy = offering policy AND buyer AND period AND
+  purpose, frozen as ODRL + Rego), runtime (the provider's data service asks the provider's own `<name>-opa`).
+- `policy/odrl/`: `OdrlParser` (supported subset only; `or`/`not`/unknown operands are rejected, never ignored) ->
+  `PolicyNode` (All/Any/Not/Atom; only All is evaluated) -> `RegoMapper` (one default-false rule + one `conditions` entry
+  per atom; `eligibility` and `decision` = + active contract `c0`). A new constraint kind = one `ConstraintKind` entry.
+- An offering's policy is the template `offering-<id>`; its asset points at it, so `EdcRenderService` renders the
+  credential atoms as the connector's CEL policy and the matrix / `run-interop.sh` cover it. Its terms are changed on the
+  offering, not in the Data space view (409).
+- One evaluator for the non-credential constraints: OPA. Do not add a Java mirror of the Rego.
+- OPA per connector company + `reed-opa` (generated; `openpolicyagent/opa`, no host ports). `deployment/opa/authz.rego`:
+  REED's deploy token (`OPA_TOKEN_*`) may write policies, the company's data key may only POST decision queries.
+  OPA keeps policies in memory: `PolicyDecisionService.ensure` re-deploys a missing one on demand.
+- Runtime: `<name>-data` -> `POST /reed/usage/decide` (pre-checks + `opa {path, input}`; REED is the PIP, only `purpose`
+  comes from the consumer via `?purpose=`) -> own OPA -> `POST /reed/usage/decisions` (decision log + PULL audit) ->
+  payload only on ALLOW; fails closed if OPA or the report is unavailable.
+- Onboarding (`onboarding/`, admin only) registers a company + attributes (`membership_status`, `verified`, `industry`,
+  `competitor_classes`); `consortium` == ACTIVE. Connector/IdentityHub/OPA containers still come from the roster + generator.
+- Scenario: Nordic Manufacturing Provider (fictional, connector `nordic`) offers Precision CNC; Hanse is eligible,
+  Nordvind is classed as competitor (`competitorClasses` in the roster).
+
 ### Ports and URL rule
-Connector prefixes: 19 nordvind, 29 castellum, 41 hanse, 42 wisla, 43 maasvlakte, 44 rhein-ndt, 45 komatsu,
+Connector prefixes: 19 nordvind, 29 castellum, 41 hanse, 42 wisla, 43 maasvlakte, 44 rhein-ndt, 45 komatsu, 46 nordic,
 39 FC (suffixes 191 api, 192 control, 193 management, 194 DSP, 195 version, 291 public). Prefixes
 ≥ 66 overflow the port range. Container-to-container URLs use service names; browser/host URLs
 use `localhost`. Everything is plain http. The browser has one origin, `http://127.0.0.1:8088` (an IP: no HSTS

@@ -12,6 +12,7 @@ import org.example.reed.domain.Asset;
 import org.example.reed.domain.Discoverability;
 import org.example.reed.policy.PolicyEvaluator;
 import org.example.reed.policy.PolicyTemplateRenderer;
+import org.example.reed.policy.odrl.OdrlParser;
 import org.example.reed.repo.AssetRepository;
 import org.example.reed.repo.ParticipantRepository;
 import org.example.reed.repo.PolicyTemplateRepository;
@@ -126,7 +127,8 @@ public class EdcRenderService {
         var owner = participants.findById(a.ownerBpn).map(p -> p.connectorName).orElse(a.ownerBpn);
         dataAddress.put("baseUrl", dataServiceUrl.replace("{name}", owner) + "/submodels/" + a.assetId);
         dataAddress.put("proxyPath", "false");
-        dataAddress.put("proxyQueryParams", "false");
+        // the consumer declares its purpose of use as ?purpose=...; the owner's data service reads nothing else
+        dataAddress.put("proxyQueryParams", "true");
         // The owner's data plane presents the owner's data key to its own data service.
         dataAddress.put("authKey", "X-Api-Key");
         dataAddress.put("authCode", dataKeys.getOrDefault(owner, ""));
@@ -162,12 +164,11 @@ public class EdcRenderService {
         var out = new ArrayList<PolicyEvaluator.Constraint>();
         templates.findById(templateName).ifPresent(t -> {
             JsonNode odrl = renderer.render(t, "*", owner, "");
-            for (var permission : odrl.path("permission")) {
-                for (var c : permission.path("constraint")) {
-                    var left = c.path("leftOperand").asText();
-                    if (CREDENTIAL_OPERANDS.contains(left)) {
-                        out.add(new PolicyEvaluator.Constraint(left, c.path("operator").asText(), c.path("rightOperand").asText()));
-                    }
+            // The connector enforces the part of the policy it can prove from credentials; the rest
+            // (competitor, purpose, period, ...) is Open Policy Agent's, at matchmaking and at runtime.
+            for (var a : OdrlParser.atoms(odrl)) {
+                if (CREDENTIAL_OPERANDS.contains(a.kind().leftOperand)) {
+                    out.add(new PolicyEvaluator.Constraint(a.kind().leftOperand, a.operator(), String.join(",", a.values())));
                 }
             }
         });

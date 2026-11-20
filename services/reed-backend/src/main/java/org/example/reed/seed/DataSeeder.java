@@ -6,6 +6,9 @@
 
 package org.example.reed.seed;
 
+import java.util.List;
+import org.example.reed.offering.OfferingService;
+import org.example.reed.repo.OfferingRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.example.reed.config.ReedProperties;
 import org.example.reed.domain.Asset;
@@ -69,12 +72,17 @@ public class DataSeeder implements CommandLineRunner {
     private final ObjectMapper mapper;
     private final Clock clock;
     private final String didPattern;
+    private final OfferingRepository offerings;
+    private final OfferingService offeringService;
 
     public DataSeeder(PolicyTemplateRepository templates, AssetClassificationRepository classifications,
                       SupplyChainRelationRepository relations, AuditEventRepository audit,
                       ParticipantRepository participants, AssetRepository assets, RfqRepository rfqs,
                       MatchRepository matches, ReedProperties props, ObjectMapper mapper, Clock clock,
-                      @Value("${reed.did-pattern}") String didPattern) {
+                      @Value("${reed.did-pattern}") String didPattern,
+                      OfferingRepository offerings, OfferingService offeringService) {
+        this.offerings = offerings;
+        this.offeringService = offeringService;
         this.templates = templates;
         this.classifications = classifications;
         this.relations = relations;
@@ -98,6 +106,7 @@ public class DataSeeder implements CommandLineRunner {
         var roster = Roster.load(mapper, dir.resolve("roster.json"));
         seedParticipants(roster);
         seedRfqs(roster, Roster.loadScenarios(mapper, dir.resolve("scenarios/matchmaking.json")));
+        seedOfferings(roster);
     }
 
     private void seedPolicyTemplates() {
@@ -204,6 +213,10 @@ public class DataSeeder implements CommandLineRunner {
             p.sectors = spec.sectors();
             p.attestations = spec.attestations();
             p.capability = spec.capability();
+            p.membershipStatus = spec.member() ? "ACTIVE" : "PENDING";
+            p.verified = spec.member();
+            p.industry = spec.industry() != null ? spec.industry() : spec.sectors() == null || spec.sectors().isEmpty() ? null : spec.sectors().get(0);
+            p.competitorClasses = spec.competitorClasses();
             if (spec.connector() != null) {
                 var name = spec.connector().name();
                 var prefix = spec.connector().portPrefix();
@@ -232,6 +245,44 @@ public class DataSeeder implements CommandLineRunner {
                 m.qualityOk = h.qualityOk();
                 m.note = "historical delivery (seeded)";
                 matches.save(m);
+            }
+        }
+    }
+
+    /**
+     * Capability offerings from the roster, published: added if missing (by id), so they reach databases
+     * seeded earlier. The asset behind an offering takes the offering's policy and becomes discoverable to
+     * every member; {@code seed-reed.sh} pushes that to the provider's connector, and the Rego reaches the
+     * Open Policy Agents the first time it is needed.
+     */
+    private void seedOfferings(Roster.File roster) {
+        for (var spec : roster.participants()) {
+            for (var o : spec.offerings()) {
+                if (offerings.existsById(o.id())) {
+                    continue;
+                }
+                var assetId = o.asset() == null || spec.connector() == null ? null
+                        : AssetClass.valueOf(o.asset()).kebab() + "-" + spec.connector().name();
+                if (!participants.existsById(spec.bpn()) || (o.asset() != null && (assetId == null || !assets.existsById(assetId)))) {
+                    LOG.warn("REED seed: capability offering {} skipped - its provider or asset is not in this database "
+                            + "(seeded from an older roster; `down -v` to reseed)", o.id());
+                    continue;
+                }
+                LOG.info("REED seed: capability offering {}", o.id());
+                var policy = o.policy() == null ? List.<OfferingService.ConstraintForm>of() : o.policy().stream()
+                        .map(c -> new OfferingService.ConstraintForm(c.path("leftOperand").asText(), c.path("operator").asText("eq"),
+                                c.path("rightOperand").asText())).toList();
+                var created = offeringService.create(spec.bpn(), o.id(), new OfferingService.OfferingForm(o.name(), o.capability(),
+                        o.resourceKind(), o.resource(), o.description(), o.keywords(), o.capacityPerMonth(), assetId, policy));
+                created.published = true;
+                created.publishedAt = clock.instant();
+                offerings.save(created);
+                if (assetId != null) {
+                    var a = assets.findById(assetId).orElseThrow();
+                    a.discoverability = Discoverability.consortium;
+                    a.policyTemplate = created.policyTemplate;
+                    assets.save(a);
+                }
             }
         }
     }

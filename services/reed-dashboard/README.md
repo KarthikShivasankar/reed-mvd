@@ -25,6 +25,7 @@ React 18 + Vite + TypeScript SPA, served by nginx on `:8088` (container port 808
 | `src/views/Marketplace.tsx` | RFQ list, RFQ form with local-LLM drafting |
 | `src/views/Matches.tsx` | ranking (score bars), rejections, partners, explanation, contract-and-confirm flow |
 | `src/views/Opportunities.tsx`, `src/views/Assistant.tsx` | supplier view, chat |
+| `src/views/Maas.tsx` | capabilities + policy builder, service RFQs (capability vs policy), service contracts + policy lifecycle, operator console, decision log |
 | `src/views/DataViews.tsx` | catalogue, contracts, EDC catalog, audit, members, policies, matrix |
 | `src/diagram.tsx` | the topology diagram, driven live during a contract |
 | `src/guide.tsx` | per-view explainers and the network reference |

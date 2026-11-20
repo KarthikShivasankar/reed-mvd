@@ -10,6 +10,7 @@ import { Opportunities } from "./views/Opportunities";
 import { Assistant } from "./views/Assistant";
 import { Factory } from "./views/Factory";
 import { DataSpace } from "./views/DataSpace";
+import { Capabilities, Operator, ServiceContracts, ServiceRfqs } from "./views/Maas";
 import { Audit, Catalogue, EdcCatalog, Matrix, Participants, Policies, Transfers } from "./views/DataViews";
 
 /* ------------------------------------------------------------------ routing
@@ -17,7 +18,8 @@ import { Audit, Catalogue, EdcCatalog, Matrix, Participants, Policies, Transfers
    shared and navigated with the browser's back button. */
 export type View =
   | "overview" | "dataspace" | "marketplace" | "matches" | "opportunities" | "assistant"
-  | "factory" | "catalogue" | "transfers" | "edc" | "audit" | "participants" | "policies" | "matrix";
+  | "factory" | "catalogue" | "transfers" | "edc" | "audit" | "participants" | "policies" | "matrix"
+  | "capabilities" | "service" | "agreements" | "operator";
 
 export interface Route { view: View; arg?: string }
 
@@ -51,14 +53,19 @@ export interface Ctx {
   operator: boolean;
 }
 
-type Group = "start" | "match" | "data" | "ref";
-const NAV: { id: View; label: string; group: Group; roles?: string[]; memberOnly?: boolean; connector?: boolean; factory?: boolean }[] = [
+type Group = "start" | "match" | "maas" | "data" | "ref";
+const NAV: { id: View; label: string; group: Group; roles?: string[]; memberOnly?: boolean; connector?: boolean; factory?: boolean; operator?: boolean }[] = [
   { id: "overview", label: "Overview", group: "start" },
   { id: "dataspace", label: "Data space", group: "start", memberOnly: true },
   { id: "marketplace", label: "Marketplace", group: "match", memberOnly: true },
   { id: "matches", label: "Matches", group: "match", roles: ["buyer", "quality-auditor", "admin"], memberOnly: true },
   { id: "opportunities", label: "Opportunities", group: "match", roles: ["supplier-engineer"], memberOnly: true },  // per supplier capability; the operator has none
   { id: "assistant", label: "Assistant", group: "match", memberOnly: true },
+  // Manufacturing-as-a-Service: capabilities with a compound policy, policy-aware matching, contracts enforced by OPA
+  { id: "capabilities", label: "Capabilities", group: "maas", memberOnly: true },
+  { id: "service", label: "Service RFQs", group: "maas", memberOnly: true },
+  { id: "agreements", label: "Service contracts", group: "maas", memberOnly: true },
+  { id: "operator", label: "Operator", group: "maas", operator: true },
   { id: "factory", label: "Factory", group: "data", factory: true },
   { id: "catalogue", label: "Catalogue", group: "data", memberOnly: true },
   { id: "transfers", label: "Contracts", group: "data", connector: true },
@@ -98,7 +105,7 @@ export function App({ config, session }: { config: AppConfig; session: Session }
   // so a shared link (e.g. a supplier opening #/matches/R1) still lands on an explanatory page.
   const hasFactory = config.connectors.some((c) => c.factory && c.name === session.participant);
   const allowed = NAV.filter((n) => (!n.memberOnly || member) && (!n.connector || !!session.participant || operator)
-    && (!n.factory || hasFactory || operator));
+    && (!n.factory || hasFactory || operator) && (!n.operator || operator));
   const visible = allowed.filter((n) => !n.roles || n.roles.some((r) => session.has(r)));
   const view = allowed.some((n) => n.id === route.view) ? route.view : "overview";
 
@@ -132,6 +139,10 @@ export function App({ config, session }: { config: AppConfig; session: Session }
           {view === "opportunities" && <Opportunities ctx={ctx} />}
           {view === "factory" && <Factory ctx={ctx} />}
           {view === "assistant" && <Assistant ctx={ctx} />}
+          {view === "capabilities" && <Capabilities ctx={ctx} />}
+          {view === "service" && <ServiceRfqs ctx={ctx} rfqId={route.arg} />}
+          {view === "agreements" && <ServiceContracts ctx={ctx} contractId={route.arg} />}
+          {view === "operator" && <Operator ctx={ctx} />}
           {view === "catalogue" && <Catalogue ctx={ctx} />}
           {view === "transfers" && <Transfers ctx={ctx} />}
           {view === "edc" && <EdcCatalog ctx={ctx} />}

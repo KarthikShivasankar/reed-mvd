@@ -130,6 +130,9 @@ public class MatchController {
         var user = CurrentUser.of(jwt);
         var bpn = member(user);
         var rfq = rfq(id);
+        if (rfq.capability != null) {
+            return List.of();  // a service RFQ: see /reed/rfqs/{id}/service-matches
+        }
         var ranked = service.rank(rfq);
         if (rfq.buyerBpn.equals(bpn) || user.canImpersonateView()) {
             return ranked;
@@ -145,7 +148,7 @@ public class MatchController {
         if (!rfq.buyerBpn.equals(bpn) && !user.canImpersonateView()) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "only the buyer sees partner recommendations");
         }
-        return service.partners(rfq, rfq.buyerBpn);
+        return rfq.capability != null ? List.of() : service.partners(rfq, rfq.buyerBpn);
     }
 
     @GetMapping("/reed/opportunities")

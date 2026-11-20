@@ -50,6 +50,11 @@ reed:
     data-service-url: ${REED_DATA_SERVICE_URL:http://{name}-data:8090}
     # validity of a time-limited (pilot) licence after the contract is signed
     pilot-days: ${REED_PILOT_DAYS:30}
+  opa:
+    # Open Policy Agent: one per connector company ({name} = connector name) and REED's own ("reed").
+    # REED deploys the Rego it generates from ODRL policies with these tokens (name=token pairs).
+    url-pattern: ${REED_OPA_URL:http://{name}-opa:8181}
+    tokens: ${REED_OPA_TOKENS:}
   mqtt:
     # Shop-floor broker: companies' devices publish sensor readings; REED publishes alerts and observations.
     enabled: ${REED_MQTT_ENABLED:true}

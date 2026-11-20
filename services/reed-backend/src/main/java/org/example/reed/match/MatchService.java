@@ -101,6 +101,9 @@ public class MatchService {
     // ---------------------------------------------------------------- ranking
 
     public List<RankedSupplier> rank(Rfq rfq) {
+        if (rfq.capability != null) {
+            return List.of();  // a service RFQ is matched against capability offerings (OfferingService), not part capabilities
+        }
         var ranked = scorer.rank(demand(rfq), candidates(rfq.buyerBpn));
         var lifecycle = new LinkedHashMap<String, MatchRecord>();
         matches.findByRfqId(rfq.id).forEach(m -> lifecycle.put(m.supplierBpn, m));
@@ -113,6 +116,9 @@ public class MatchService {
     }
 
     public List<Partner> partners(Rfq rfq, String viewerBpn) {
+        if (rfq.capability != null) {
+            return List.of();
+        }
         var demand = demand(rfq);
         var pool = candidates(rfq.buyerBpn);
         var out = new ArrayList<Partner>();
@@ -140,7 +146,7 @@ public class MatchService {
         var self = toSupplier(me);
         var out = new ArrayList<Opportunity>();
         for (var rfq : rfqs.findByStateOrderByCreatedAtDesc(Rfq.State.OPEN)) {
-            if (rfq.buyerBpn.equals(supplierBpn)) {
+            if (rfq.buyerBpn.equals(supplierBpn) || rfq.capability != null) {  // service RFQs are matched against offerings
                 continue;
             }
             var r = scorer.score(demand(rfq), self);
@@ -157,6 +163,9 @@ public class MatchService {
 
     @Transactional
     public MatchRecord shortlist(Rfq rfq, String supplierBpn) {
+        if (rfq.capability != null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, rfq.id + " is a service RFQ: select a provider from its service matches");
+        }
         var existing = matches.findByRfqIdAndSupplierBpn(rfq.id, supplierBpn);
         if (existing.isPresent()) {
             return existing.get();
@@ -393,7 +402,7 @@ public class MatchService {
         }
     }
 
-    private static String text(JsonNode n, String field) {
+    public static String text(JsonNode n, String field) {
         var v = n.has(field) ? n.get(field) : n.path("edc:" + field);
         if (v.isMissingNode()) {
             v = n.path("https://w3id.org/edc/v0.0.1/ns/" + field);

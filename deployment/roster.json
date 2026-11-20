@@ -14,6 +14,9 @@
       "country": "NO", "city": "Stavanger", "vatId": "NO 914 000 001 MVA",
       "lat": 58.97, "lon": 5.73, "portAccess": true, "railAccess": false,
       "sectors": ["wind", "hydro"],
+      "industry": "wind-energy",
+      "competitorClasses": ["precision-machining"],
+      "_competitorComment": "Invented for the policy scenario: Nordvind runs an in-house precision machining shop that sells spare capacity, so machining providers class it as a competitor.",
       "connector": { "name": "nordvind", "portPrefix": "19" },
       "attestations": ["ISO9001", "ISO14001"],
       "assets": ["PartDigitalTwin", "BillOfMaterial", "DigitalProductPassport", "FixtureHandlingStrategy", "ProductionStatus", "QualityEvidence", "SimulationResult"],
@@ -108,6 +111,8 @@
       "country": "PL", "city": "Gdańsk", "vatId": "PL 5830000003",
       "lat": 54.35, "lon": 18.65, "portAccess": true, "railAccess": true,
       "sectors": ["wind", "offshore", "hydro", "rail"],
+      "industry": "machining",
+      "competitorClasses": ["precision-machining"],
       "connector": { "name": "wisla", "portPrefix": "42" },
       "attestations": ["ISO9001", "DNV"],
       "relations": [{ "type": "SUPPLIES", "to": "BPN-REED-OEM-0002" }],
@@ -389,6 +394,57 @@
       "attestations": ["ISO9001"],
       "relations": [{ "type": "PROJECT_MEMBER", "to": "BPN-REED-OEM-0001" }],
       "users": []
+    },
+    {
+      "bpn": "BPN-REED-SUP-0013",
+      "name": "Nordic Manufacturing Provider AS",
+      "short": "Nordic",
+      "role": "SUPPLIER",
+      "_comment": "Fictional. The provider of the policy-enforcement scenario (docs/policy-enforcement.md): it has no part-matching capability claim, so the part RFQ scenarios R1-K2 are unaffected; it offers a manufacturing service (offerings) guarded by a compound ODRL policy.",
+      "country": "NO", "city": "Raufoss", "vatId": "NO 914 000 013 MVA",
+      "lat": 60.72, "lon": 10.61, "portAccess": false, "railAccess": true,
+      "sectors": ["heavy-machinery", "rail"],
+      "industry": "machining",
+      "competitorClasses": ["precision-machining"],
+      "connector": { "name": "nordic", "portPrefix": "46" },
+      "attestations": ["ISO9001", "ISO14001"],
+      "assets": ["ProductionStatus"],
+      "offerings": [
+        {
+          "id": "precision-cnc-nordic",
+          "name": "Precision CNC Manufacturing",
+          "capability": "cnc-machining",
+          "resourceKind": "API",
+          "resource": "Real-time machine availability API",
+          "asset": "ProductionStatus",
+          "description": "5-axis milling and turn-mill machining of precision parts in aluminium, steel and titanium. The contract gives access to the real-time machine availability of the CNC cell.",
+          "keywords": ["5-axis", "milling", "turning", "aluminium", "titanium", "machine-availability"],
+          "capacityPerMonth": 400,
+          "policy": [
+            { "leftOperand": "MembershipCredential.role", "operator": "eq", "rightOperand": "OEM" },
+            { "leftOperand": "MembershipCredential", "operator": "eq", "rightOperand": "active" },
+            { "leftOperand": "MembershipCredential.country", "operator": "isAnyOf", "rightOperand": "$EEA" },
+            { "leftOperand": "reed:competitor", "operator": "eq", "rightOperand": "false" },
+            { "leftOperand": "reed:pilotProject", "operator": "eq", "rightOperand": "true" }
+          ]
+        }
+      ],
+      "users": [{ "username": "nordic-engineer", "roles": ["supplier-engineer", "data-steward"] }],
+      "factory": {
+        "name": "Raufoss demo CNC cell (simulated)",
+        "machines": [
+          { "id": "mill-5ax-1", "name": "5-axis machining centre", "sensors": [
+            { "id": "spindle-load", "name": "Spindle load", "unit": "%", "nominal": 55, "hi": 95, "noise": 3, "dailyAmp": 8,
+              "action": "Reduce feed rate and check the tool for wear or chip packing" },
+            { "id": "spindle-vibration", "name": "Spindle vibration", "unit": "mm/s", "nominal": 1.4, "hi": 4.5, "noise": 0.1,
+              "driftPerHour": 0.35, "cycleHours": 10, "action": "Inspect spindle bearings and tool balance" }
+          ] },
+          { "id": "turnmill-1", "name": "Turn-mill centre", "sensors": [
+            { "id": "coolant-temp", "name": "Coolant temperature", "unit": "°C", "nominal": 23, "lo": 18, "hi": 30, "noise": 0.25, "dailyAmp": 1.5,
+              "action": "Check the chiller and coolant concentration" }
+          ] }
+        ]
+      }
     },
     {
       "bpn": "BPN-REED-OEM-0003",

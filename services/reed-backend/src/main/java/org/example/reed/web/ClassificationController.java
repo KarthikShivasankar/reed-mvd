@@ -35,6 +35,7 @@ public class ClassificationController {
 
     @GetMapping("/reed/policy-templates")
     public List<PolicyTemplate> policyTemplates() {
-        return templates.findAll();
+        // reusable templates only; a capability offering's own policy is shown with the offering
+        return templates.findAll().stream().filter(t -> !t.name.startsWith("offering-")).toList();
     }
 }

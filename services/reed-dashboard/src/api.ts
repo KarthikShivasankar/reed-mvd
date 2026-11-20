@@ -69,6 +69,11 @@ export interface Participant {
   dspUrl: string | null;
   verifiedCerts: string[];
   capability: Capability | null;
+  /** PENDING (onboarding started), ACTIVE or SUSPENDED */
+  membershipStatus: string;
+  verified: boolean;
+  industry: string | null;
+  competitorClasses: string[];
 }
 
 /* ---- shop floor ---- */
@@ -176,6 +181,14 @@ export interface Rfq {
   partnerProcesses: string[];
   state: "OPEN" | "AWARDED" | "CLOSED";
   createdAt: string;
+  /** set on a service RFQ (matched against capability offerings) */
+  capability: string | null;
+  keywords: string[] | null;
+  requiredCapacity: number | null;
+  preferredRegion: string | null;
+  startDate: string | null;
+  endDate: string | null;
+  purpose: string | null;
 }
 
 export interface Criterion {
@@ -288,6 +301,63 @@ export interface ChatReply {
   model: string | null;
   redactions: number;
 }
+
+/* ---- capability offerings, compound policies, contracts, OPA decisions ---- */
+/** One ODRL constraint; all constraints of a policy must hold (AND). */
+export interface ConstraintForm { leftOperand: string; operator: string; rightOperand: string }
+/** One condition of a policy and, in a decision, whether it held. */
+export interface Condition { id: string; kind: string; label: string; pass: boolean }
+/** A policy at every level: ODRL, its conditions in words, the combined sentence, the generated Rego. */
+export interface PolicyView { policyId: string; odrl: any; components: Condition[]; effective: string; rego: string }
+export interface Offering {
+  id: string; name: string; capability: string; resourceKind: string; resource: string | null; description: string | null;
+  keywords: string[]; capacityPerMonth: number | null; providerBpn: string; provider: string; providerCountry: string;
+  connector: string | null; assetId: string | null; published: boolean; createdAt: string; publishedAt: string | null;
+  policy: PolicyView;
+}
+export interface OfferingForm {
+  name: string; capability: string; resourceKind: string; resource: string; description: string; keywords: string[];
+  capacityPerMonth: number | null; assetId: string | null; policy: ConstraintForm[];
+}
+/** An Open Policy Agent decision. */
+export interface Outcome {
+  id: number | null; stage: "MATCH" | "RUNTIME" | "SIMULATED"; decision: "ALLOW" | "DENY"; policyId: string;
+  decidedBy: string; conditions: Condition[]; failed: Condition[]; explanation: string; at: string;
+}
+export interface CapabilityCheck { key: string; label: string; pass: boolean; detail: string }
+/** `policy` is null when the capability does not match (eligibility is only asked for real candidates). */
+export interface ServiceMatch {
+  offering: Offering; capabilityChecks: CapabilityCheck[]; capabilityMatch: boolean; policy: Outcome | null;
+  policyEligible: boolean; eligible: boolean; contractId: string | null; contractStatus: string | null;
+}
+export interface ServiceRfqForm {
+  title: string; story: string; capability: string; keywords: string[]; requiredCapacity: number | null;
+  preferredRegion: string; startDate: string; endDate: string; purpose: string;
+}
+export interface LifecycleStep { key: string; label: string; detail: string; at: string | null }
+export interface Contract {
+  id: string; status: "DRAFT" | "NEGOTIATING" | "AGREED" | "ACTIVE" | "EXPIRED" | "TERMINATED"; rfqId: string | null;
+  offeringId: string; offering: string; capability: string; resource: string | null; assetId: string;
+  providerBpn: string; provider: string; providerConnector: string | null; consumerBpn: string; consumer: string;
+  consumerConnector: string | null; startDate: string; expiryDate: string; purpose: string; agreementId: string | null;
+  deployedTo: string | null; createdAt: string; updatedAt: string; policy: PolicyView; lifecycle: LifecycleStep[];
+  decisions: Outcome[];
+}
+export interface DecisionRow {
+  outcome: Outcome; requesterBpn: string | null; requester: string | null; providerBpn: string | null; provider: string | null;
+  contractId: string | null; offeringId: string | null; rfqId: string | null; assetId: string | null; action: string | null;
+  purpose: string | null;
+}
+export interface ConnectorStatus {
+  bpn: string; company: string; connector: string; endpoint: string; did: string; online: boolean;
+  decisionPoint: string; decisionPointOnline: boolean;
+}
+export interface CompanyForm {
+  name?: string; shortName?: string; role?: string; country?: string; city?: string; industry?: string;
+  sectors?: string[]; competitorClasses?: string[]; verified?: boolean;
+}
+/** The purposes of use a buyer can declare (the backend's list). */
+export const PURPOSES = ["pilot-evaluation", "production", "research", "quality-assurance", "maintenance"];
 
 export interface ScenarioFile {
   rfqs: { id: string; chain: string; buyer: string; title: string; story: string; expectedTop: string }[];
@@ -423,6 +493,35 @@ export class Api {
     return this.call<MatchRecord>("POST", `/reed/matches/${seg(id)}/feedback`, { onTime, qualityOk });
   }
 
+  /* ---- capability offerings + compound policies ---- */
+  offerings() { return this.call<Offering[]>("GET", "/reed/offerings"); }
+  createOffering(form: OfferingForm) { return this.call<Offering>("POST", "/reed/offerings", form); }
+  setOfferingPolicy(id: string, policy: ConstraintForm[]) { return this.call<Offering>("PUT", `/reed/offerings/${seg(id)}/policy`, { policy }); }
+  publishOffering(id: string) { return this.call<Offering>("POST", `/reed/offerings/${seg(id)}/publish`); }
+  /** ODRL constraints -> conditions, combined sentence, ODRL document and Rego; nothing is stored. */
+  translatePolicy(policy: ConstraintForm[]) { return this.call<PolicyView>("POST", "/reed/policies/translate", { policy }); }
+
+  /* ---- service RFQs: capability match and policy eligibility, apart ---- */
+  createServiceRfq(form: ServiceRfqForm) { return this.call<Rfq>("POST", "/reed/service-rfqs", form); }
+  serviceMatches(rfqId: string) { return this.call<ServiceMatch[]>("GET", `/reed/rfqs/${seg(rfqId)}/service-matches`); }
+
+  /* ---- contracts + policy decisions ---- */
+  contracts() { return this.call<Contract[]>("GET", "/reed/contracts"); }
+  contract(id: string) { return this.call<Contract>("GET", `/reed/contracts/${seg(id)}`); }
+  selectProvider(rfqId: string, offeringId: string) { return this.call<Contract>("POST", "/reed/contracts", { rfqId, offeringId }); }
+  contractStep(id: string, step: "accept" | "activate" | "terminate") { return this.call<Contract>("POST", `/reed/contracts/${seg(id)}/${step}`); }
+  contractAgreed(id: string, agreementId: string) { return this.call<Contract>("POST", `/reed/contracts/${seg(id)}/agreed`, { agreementId }); }
+  decisions() { return this.call<DecisionRow[]>("GET", "/reed/policy-decisions"); }
+  simulate(body: { contractId?: string; offeringId?: string; requesterBpn?: string; purpose: string; at?: string }) {
+    return this.call<Outcome>("POST", "/reed/policy-decisions/simulate", body);
+  }
+
+  /* ---- consortium management (operator) ---- */
+  onboard(form: CompanyForm) { return this.call<Participant>("POST", "/reed/onboarding", form); }
+  updateCompany(bpn: string, form: CompanyForm) { return this.call<Participant>("PUT", `/reed/onboarding/${seg(bpn)}`, form); }
+  setMembership(bpn: string, status: string) { return this.call<Participant>("POST", `/reed/onboarding/${seg(bpn)}/status`, { status }); }
+  connectorStatus() { return this.call<ConnectorStatus[]>("GET", "/reed/operator/connectors"); }
+
   /* ---- assistant (local LLM) ---- */
   draftRfq(text: string) { return this.call<DraftResponse>("POST", "/reed/assistant/rfq-draft", { text }); }
   explain(rfqId: string) { return this.call<Explanation>("POST", `/reed/assistant/explain/${seg(rfqId)}`); }
@@ -467,10 +566,16 @@ export class Api {
     const u = new URL(c.publicUrl);
     return `${window.location.origin}/dp/${c.name}:${u.port}${u.pathname}${endpoint.slice(c.publicUrl.length)}`;
   }
-  async pull(endpoint: string, authorization: string): Promise<string> {
-    const res = await fetch(this.viaOrigin(endpoint), { headers: { Authorization: authorization } });
+  /** `purpose`: the declared purpose of use, for assets whose policy asks for one. */
+  async pull(endpoint: string, authorization: string, purpose?: string): Promise<string> {
+    const res = await fetch(this.viaOrigin(endpoint) + (purpose ? `?purpose=${encodeURIComponent(purpose)}` : ""),
+      { headers: { Authorization: authorization } });
     const text = await res.text();
-    if (!res.ok) throw new Error(`data plane answered ${res.status}: ${text.slice(0, 200)}`);
+    if (!res.ok) {
+      let reason = "";
+      try { reason = JSON.parse(text).reason ?? ""; } catch { /* not JSON */ }
+      throw new ApiError(res.status, reason || `data plane answered ${res.status}: ${text.slice(0, 200)}`);
+    }
     return text;
   }
 }
@@ -498,6 +603,13 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export async function runReedFlow(api: Api, consumer: string, provider: ConnectorRef, assetId: string,
                                   cb: FlowCallbacks): Promise<FlowResult> {
+  const agreementId = await agree(api, consumer, provider, assetId, cb);
+  return { agreementId, payload: await pullUnder(api, consumer, provider, agreementId, cb) };
+}
+
+/** Stages 0-2: catalog -> offer -> negotiation; resolves to the contract agreement id. */
+export async function agree(api: Api, consumer: string, provider: ConnectorRef, assetId: string,
+                            cb: FlowCallbacks): Promise<string> {
   const log = (m: string) => cb.onLog?.(m);
 
   cb.onStage(0);
@@ -527,7 +639,13 @@ export async function runReedFlow(api: Api, consumer: string, provider: Connecto
   if (!agreementId) throw new Error("negotiation did not finish within a minute");
   cb.onStage(2);
   log(`Contract agreed (${agreementId.slice(0, 8)})`);
+  return agreementId;
+}
 
+/** Stages 3-6: transfer -> EDR -> pull under an existing agreement; `purpose` is declared to the provider. */
+export async function pullUnder(api: Api, consumer: string, provider: ConnectorRef, agreementId: string,
+                                cb: FlowCallbacks, purpose?: string): Promise<string> {
+  const log = (m: string) => cb.onLog?.(m);
   cb.onStage(3);
   const tp = await api.transfer(consumer, provider, agreementId);
   const tpId = tp["@id"];
@@ -554,10 +672,10 @@ export async function runReedFlow(api: Api, consumer: string, provider: Connecto
   cb.onStage(5);
   log(`Access token received for ${edr.endpoint}`);
 
-  const payload = await api.pull(edr.endpoint, edr.authorization);
+  const payload = await api.pull(edr.endpoint, edr.authorization, purpose);
   cb.onStage(6);
   log("Confidential payload received");
-  return { agreementId, payload };
+  return payload;
 }
 
 /** Pulls the first readable sentence out of an EDC policy failure. */

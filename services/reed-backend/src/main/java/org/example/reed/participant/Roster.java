@@ -40,7 +40,16 @@ public final class Roster {
                                   ConnectorSpec connector, String identity, List<String> attestations,
                                   List<RelationSpec> relations, CapabilityClaim capability,
                                   JsonNode confidentialCapability, List<String> assets,
-                                  List<HistorySpec> history, List<UserSpec> users, FactorySpec factory) {
+                                  List<HistorySpec> history, List<UserSpec> users, FactorySpec factory,
+                                  String industry, List<String> competitorClasses, List<OfferingSpec> offerings) {
+
+        public List<String> competitorClasses() {
+            return competitorClasses == null ? List.of() : competitorClasses;
+        }
+
+        public List<OfferingSpec> offerings() {
+            return offerings == null ? List.of() : offerings;
+        }
 
         public boolean member() {
             return consortium == null || consortium;
@@ -61,6 +70,12 @@ public final class Roster {
         public List<HistorySpec> history() {
             return history == null ? List.of() : history;
         }
+    }
+
+    /** A capability offering; {@code asset}: the asset class behind its resource; {@code policy}: ODRL constraints, all must hold. */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record OfferingSpec(String id, String name, String capability, String resourceKind, String resource, String asset,
+                               String description, List<String> keywords, Integer capacityPerMonth, List<JsonNode> policy) {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)

@@ -37,6 +37,7 @@ if [ -n "$ROOT" ]; then   # first run (or a Vault set up before the root token w
   provision wisla "$VAULT_TOKEN_WISLA"
   provision maasvlakte "$VAULT_TOKEN_MAASVLAKTE"
   provision rhein-ndt "$VAULT_TOKEN_RHEIN_NDT"
+  provision nordic "$VAULT_TOKEN_NORDIC"
   provision komatsu "$VAULT_TOKEN_KOMATSU"
   provision federated-catalog "$VAULT_TOKEN_FEDERATED_CATALOG"
   provision issuer "$VAULT_TOKEN_ISSUER"
@@ -57,6 +58,7 @@ aes castellum "$VAULT_TOKEN_CASTELLUM"
 aes wisla "$VAULT_TOKEN_WISLA"
 aes maasvlakte "$VAULT_TOKEN_MAASVLAKTE"
 aes rhein-ndt "$VAULT_TOKEN_RHEIN_NDT"
+aes nordic "$VAULT_TOKEN_NORDIC"
 aes komatsu "$VAULT_TOKEN_KOMATSU"
 aes federated-catalog "$VAULT_TOKEN_FEDERATED_CATALOG"
 aes issuer "$VAULT_TOKEN_ISSUER"
@@ -84,9 +86,13 @@ VAULT_TOKEN="$VAULT_TOKEN_RHEIN_NDT" vault kv put secret/rhein-ndt/rhein-ndt-sig
 VAULT_TOKEN="$VAULT_TOKEN_RHEIN_NDT" vault kv put secret/rhein-ndt/rhein-ndt-verification-key content=@/keys/rhein-ndt-verification-key.pem > /dev/null
 VAULT_TOKEN="$VAULT_TOKEN_RHEIN_NDT" vault kv put secret/rhein-ndt/rhein-ndt-mgmt-api-key content="$MGMT_KEY_RHEIN_NDT" > /dev/null
 VAULT_TOKEN="$VAULT_TOKEN_RHEIN_NDT" vault kv put secret/rhein-ndt/rhein-ndt-callback-key content="$CALLBACK_KEY_RHEIN_NDT" > /dev/null
+VAULT_TOKEN="$VAULT_TOKEN_NORDIC" vault kv put secret/nordic/nordic-signing-key content=@/keys/nordic-signing-key.pem > /dev/null
+VAULT_TOKEN="$VAULT_TOKEN_NORDIC" vault kv put secret/nordic/nordic-verification-key content=@/keys/nordic-verification-key.pem > /dev/null
+VAULT_TOKEN="$VAULT_TOKEN_NORDIC" vault kv put secret/nordic/nordic-mgmt-api-key content="$MGMT_KEY_NORDIC" > /dev/null
+VAULT_TOKEN="$VAULT_TOKEN_NORDIC" vault kv put secret/nordic/nordic-callback-key content="$CALLBACK_KEY_NORDIC" > /dev/null
 VAULT_TOKEN="$VAULT_TOKEN_KOMATSU" vault kv put secret/komatsu/komatsu-signing-key content=@/keys/komatsu-signing-key.pem > /dev/null
 VAULT_TOKEN="$VAULT_TOKEN_KOMATSU" vault kv put secret/komatsu/komatsu-verification-key content=@/keys/komatsu-verification-key.pem > /dev/null
 VAULT_TOKEN="$VAULT_TOKEN_KOMATSU" vault kv put secret/komatsu/komatsu-mgmt-api-key content="$MGMT_KEY_KOMATSU" > /dev/null
 VAULT_TOKEN="$VAULT_TOKEN_KOMATSU" vault kv put secret/komatsu/komatsu-callback-key content="$CALLBACK_KEY_KOMATSU" > /dev/null
 VAULT_TOKEN="$VAULT_TOKEN_FEDERATED_CATALOG" vault kv put secret/federated-catalog/federated-catalog-mgmt-api-key content="$MGMT_KEY_FEDERATED_CATALOG" > /dev/null
-echo "Vault ready: 9 identities, each confined to secret/<name>/, no root token."
+echo "Vault ready: 10 identities, each confined to secret/<name>/, no root token."

@@ -67,6 +67,9 @@ public class PolicyService {
     public record Inbound(Claims claims, List<Offer> offers) {
     }
 
+    /** Policy templates with this prefix are the policies of capability offerings ({@code offering-<id>}). */
+    public static final String OFFERING_PREFIX = "offering-";
+
     private final AssetRepository assets;
     private final ParticipantRepository participants;
     private final PolicyTemplateRepository templates;
@@ -149,6 +152,10 @@ public class PolicyService {
     @Transactional
     public AssetAccess change(String actorBpn, String username, String assetId, Change c) {
         var a = asset(assetId, actorBpn);
+        if (a.policyTemplate.startsWith(OFFERING_PREFIX)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, a.assetId + " is the resource of a capability offering: "
+                    + "its terms are the offering's policy, change them there");
+        }
         var d = discoverability(c.discoverability());
         var t = template(c.policyTemplate());
         var before = a.discoverability + "/" + a.policyTemplate;
@@ -156,17 +163,23 @@ public class PolicyService {
         a.policyTemplate = t;
         assets.save(a);
 
+        var owner = publish(a);
+        audit.save(new AuditEvent(EventType.POLICY, actorBpn, a.assetId, username + " changed the terms of " + a.assetId
+                + " from " + before + " to " + d + "/" + t + " and published them to connector " + owner.connectorName));
+        return evaluate(a, d, t, requesters(), claims(), names());
+    }
+
+    /** Publishes an asset's current terms to its owner's connector: both policy definitions, the asset, the contract definition. */
+    public Participant publish(Asset a) {
         var owner = participants.findById(a.ownerBpn).orElseThrow();
         if (owner.connectorName == null) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "the owner has no connector to publish to");
         }
-        upsert(owner, "/v4/policydefinitions", render.accessPolicyDefinition(d, a.ownerBpn));
-        upsert(owner, "/v4/policydefinitions", render.contractPolicyDefinition(t, a.ownerBpn));
+        upsert(owner, "/v4/policydefinitions", render.accessPolicyDefinition(a.discoverability, a.ownerBpn));
+        upsert(owner, "/v4/policydefinitions", render.contractPolicyDefinition(a.policyTemplate, a.ownerBpn));
         upsert(owner, "/v4/assets", render.asset(a));
         upsert(owner, "/v4/contractdefinitions", render.contractDefinition(a));
-        audit.save(new AuditEvent(EventType.POLICY, actorBpn, a.assetId, username + " changed the terms of " + a.assetId
-                + " from " + before + " to " + d + "/" + t + " and published them to connector " + owner.connectorName));
-        return evaluate(a, d, t, requesters(), claims(), names());
+        return owner;
     }
 
     /** POST, or PUT if it exists (policy definitions are updated by id, assets and contract definitions by body). */
@@ -257,7 +270,8 @@ public class PolicyService {
     }
 
     private String template(String t) {
-        if (t == null || !templates.existsById(t)) {
+        // an offering's policy belongs to that offering alone: it is not a template other assets can pick
+        if (t == null || t.startsWith(OFFERING_PREFIX) || !templates.existsById(t)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "unknown policy template " + t);
         }
         return t;

@@ -16,7 +16,7 @@ export function Matches({ ctx, rfqId }: { ctx: Ctx; rfqId?: string }) {
 /** Without an RFQ in the URL: the RFQs whose ranking this user may see. */
 function RfqPicker({ ctx }: { ctx: Ctx }) {
   const rfqs = useAsync(() => ctx.api.rfqs(), [ctx.api]);
-  const mine = (rfqs.data ?? []).filter((r) => ctx.operator || r.buyerBpn === ctx.session.bpn);
+  const mine = (rfqs.data ?? []).filter((r) => !r.capability && (ctx.operator || r.buyerBpn === ctx.session.bpn));
   return (
     <>
       <div className="view-head">

@@ -110,7 +110,7 @@ public final class PolicyEvaluator {
         };
     }
 
-    private static String countries(String op, String r) {
+    public static String countries(String op, String r) {
         var l = list(r);
         var region = l.containsAll(EU27) && l.size() == EU27.size() ? "the EU"
                 : l.containsAll(EU27) && l.containsAll(EEA_EFTA) && l.size() == EU27.size() + EEA_EFTA.size() ? "the EU/EEA"

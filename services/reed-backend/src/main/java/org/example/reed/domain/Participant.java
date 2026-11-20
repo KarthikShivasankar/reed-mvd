@@ -39,7 +39,20 @@ public class Participant {
     /** OEM, SUPPLIER or SERVICE. */
     public String role;
 
+    /** Always {@code membershipStatus == ACTIVE}; kept because the credential views and older code read it. */
     public boolean consortium;
+
+    /** PENDING (onboarding started), ACTIVE or SUSPENDED: set by the REED operator. */
+    public String membershipStatus = "ACTIVE";
+
+    /** The operator has verified the company's registration data. */
+    public boolean verified;
+
+    public String industry;
+
+    /** Market segments the company competes in; two companies sharing one are competitors. */
+    @JdbcTypeCode(SqlTypes.JSON)
+    public List<String> competitorClasses = List.of();
 
     /** A real company used only in invented demo scenarios: nothing about it is a factual claim. */
     public boolean illustrative;

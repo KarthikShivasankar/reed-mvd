@@ -376,6 +376,34 @@
       "requiredActions": []
     },
     {
+      "username": "nordic-engineer",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Demo",
+      "lastName": "User",
+      "email": "nordic-engineer@reed.example",
+      "attributes": {
+        "bpn": [
+          "BPN-REED-SUP-0013"
+        ],
+        "participant": [
+          "nordic"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "reed-demo",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "supplier-engineer",
+        "data-steward"
+      ],
+      "requiredActions": []
+    },
+    {
       "username": "komatsu-buyer",
       "enabled": true,
       "emailVerified": true,

@@ -31,7 +31,7 @@ public class PolicyTemplate {
     public String description;
 
     /** Faithful ODRL fragment (JSON) with substitution placeholders. */
-    @Column(length = 4000)
+    @Column(columnDefinition = "text")
     public String odrl;
 
     protected PolicyTemplate() {

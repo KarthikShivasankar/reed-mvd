@@ -1,3 +1,4 @@
+import { OpDecisions } from "./Maas";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Ctx } from "../App";
 import { AuditEvent, datasetsOf, policyReason, prop } from "../api";
@@ -170,6 +171,7 @@ export function EdcCatalog({ ctx }: { ctx: Ctx }) {
 const EVENT_TEXT: Record<string, string> = {
   CLASSIFY: "Classified", DISCOVER: "Discovered", REQUEST: "Requested", NEGOTIATE: "Negotiated",
   PULL: "Payload pulled", MATCH: "Matchmaking", ASSIST: "Assistant", POLICY: "Terms changed",
+  ONBOARD: "Onboarding", CONTRACT: "Contract",
 };
 
 export function Audit({ ctx }: { ctx: Ctx }) {
@@ -188,12 +190,21 @@ export function Audit({ ctx }: { ctx: Ctx }) {
     return () => { if (timer.current) window.clearInterval(timer.current); };
   }, [live, poll]);
   const shown = (rows ?? []).filter((r) => !type || r.eventType === type);
+  const [log, setLog] = useState<"events" | "decisions">("events");
 
   return (
     <>
       <Head title="Audit trail" lede={ctx.operator ? "Every governed action in the data space, newest first." : `Actions by or concerning ${ctx.me.organisation?.shortName ?? "your organisation"}, newest first.`} />
       <Explainer help={TAB_HELP.audit} />
-      <Panel title="Events" right={
+      <div className="controls">
+        <div className="seg" role="group" aria-label="Which log">
+          <button className={log === "events" ? "active" : ""} onClick={() => setLog("events")}>Events</button>
+          <button className={log === "decisions" ? "active" : ""} onClick={() => setLog("decisions")}>Policy decisions</button>
+        </div>
+      </div>
+      {log === "decisions" && ctx.member && <OpDecisions ctx={ctx} />}
+      {log === "decisions" && !ctx.member && <div className="notice">Policy decisions are logged for consortium members.</div>}
+      {log === "events" && <Panel title="Events" right={
         <span className="row">
           <select className="field" value={type} onChange={(e) => setType(e.target.value)} aria-label="Filter by event type">
             <option value="">All events</option>
@@ -217,7 +228,7 @@ export function Audit({ ctx }: { ctx: Ctx }) {
             </tbody>
           </table>
         </Status>
-      </Panel>
+      </Panel>}
     </>
   );
 }

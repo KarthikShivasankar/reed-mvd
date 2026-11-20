@@ -33,6 +33,7 @@ services:
       VAULT_TOKEN_WISLA: ${VAULT_TOKEN_WISLA}
       VAULT_TOKEN_MAASVLAKTE: ${VAULT_TOKEN_MAASVLAKTE}
       VAULT_TOKEN_RHEIN_NDT: ${VAULT_TOKEN_RHEIN_NDT}
+      VAULT_TOKEN_NORDIC: ${VAULT_TOKEN_NORDIC}
       VAULT_TOKEN_KOMATSU: ${VAULT_TOKEN_KOMATSU}
       VAULT_TOKEN_FEDERATED_CATALOG: ${VAULT_TOKEN_FEDERATED_CATALOG}
       VAULT_TOKEN_ISSUER: ${VAULT_TOKEN_ISSUER}
@@ -48,6 +49,8 @@ services:
       CALLBACK_KEY_MAASVLAKTE: ${CALLBACK_KEY_MAASVLAKTE}
       MGMT_KEY_RHEIN_NDT: ${MGMT_KEY_RHEIN_NDT}
       CALLBACK_KEY_RHEIN_NDT: ${CALLBACK_KEY_RHEIN_NDT}
+      MGMT_KEY_NORDIC: ${MGMT_KEY_NORDIC}
+      CALLBACK_KEY_NORDIC: ${CALLBACK_KEY_NORDIC}
       MGMT_KEY_KOMATSU: ${MGMT_KEY_KOMATSU}
       CALLBACK_KEY_KOMATSU: ${CALLBACK_KEY_KOMATSU}
       MGMT_KEY_FEDERATED_CATALOG: ${MGMT_KEY_FEDERATED_CATALOG}
@@ -141,11 +144,12 @@ services:
   mosquitto:
     image: eclipse-mosquitto:2.0.20
     container_name: reed-mosquitto
-    entrypoint: ["sh", "-c", "set -e; umask 077; mosquitto_passwd -c -b /mosquitto/data/passwd reed-backend \"$$MQTT_PASSWORD_REED_BACKEND\"; mosquitto_passwd -b /mosquitto/data/passwd castellum \"$$MQTT_PASSWORD_CASTELLUM\"; mosquitto_passwd -b /mosquitto/data/passwd wisla \"$$MQTT_PASSWORD_WISLA\"; chown -R mosquitto:mosquitto /mosquitto/data; exec mosquitto -c /mosquitto/config/mosquitto.conf"]
+    entrypoint: ["sh", "-c", "set -e; umask 077; mosquitto_passwd -c -b /mosquitto/data/passwd reed-backend \"$$MQTT_PASSWORD_REED_BACKEND\"; mosquitto_passwd -b /mosquitto/data/passwd castellum \"$$MQTT_PASSWORD_CASTELLUM\"; mosquitto_passwd -b /mosquitto/data/passwd wisla \"$$MQTT_PASSWORD_WISLA\"; mosquitto_passwd -b /mosquitto/data/passwd nordic \"$$MQTT_PASSWORD_NORDIC\"; chown -R mosquitto:mosquitto /mosquitto/data; exec mosquitto -c /mosquitto/config/mosquitto.conf"]
     environment:
       MQTT_PASSWORD_REED_BACKEND: ${MQTT_PASSWORD_REED_BACKEND}
       MQTT_PASSWORD_CASTELLUM: ${MQTT_PASSWORD_CASTELLUM}
       MQTT_PASSWORD_WISLA: ${MQTT_PASSWORD_WISLA}
+      MQTT_PASSWORD_NORDIC: ${MQTT_PASSWORD_NORDIC}
     mem_limit: 64m
     volumes:
       - ./mosquitto:/mosquitto/config:ro
@@ -190,6 +194,35 @@ services:
       - ./roster.json:/app/roster.json:ro
       - reed-factory-wisla:/state
 
+  # Nordic's shop-floor devices (simulated demo line from the roster): sensors over MQTT.
+  nordic-factory:
+    image: reed/factory-sim:local
+    build:
+      context: ../services/factory-sim
+    container_name: reed-nordic-factory
+    depends_on:  # the backend's persistent MQTT session must exist before the history backfill
+      reed-backend:
+        condition: service_healthy
+    environment:
+      COMPANY: nordic
+      MQTT_PASSWORD: ${MQTT_PASSWORD_NORDIC}
+    mem_limit: 64m
+    volumes:
+      - ./roster.json:/app/roster.json:ro
+      - reed-factory-nordic:/state
+
+  # REED's own Open Policy Agent: matchmaking-time eligibility (is this buyer allowed this offering?).
+  reed-opa:
+    image: openpolicyagent/opa:1.22.4-static
+    container_name: reed-reed-opa
+    command: ["run", "--server", "--addr=:8181", "--authentication=token", "--authorization=basic",
+              "--log-level=error", "/policy/authz.rego"]
+    environment:
+      OPA_DEPLOY_TOKEN: ${OPA_TOKEN_REED}
+    mem_limit: 96m
+    volumes:
+      - ./opa/authz.rego:/policy/authz.rego:ro
+
   # ---------- REED backend ----------
   reed-backend:
     image: reed/backend:local
@@ -216,6 +249,7 @@ services:
       REED_ISSUER: http://127.0.0.1:8088/realms/reed
       REED_CORS_ORIGINS: http://127.0.0.1:8088
       REED_MQTT_PASSWORD: ${MQTT_PASSWORD_REED_BACKEND}
+      REED_OPA_TOKENS: ${REED_OPA_TOKENS}
       JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75
     volumes:
       - ./roster.json:/app/deployment/roster.json:ro
@@ -426,6 +460,35 @@ services:
       interval: 5s
       retries: 60
 
+  # IdentityHub of Nordic Manufacturing Provider AS
+  nordic-ih:
+    image: reed/identityhub:local
+    build:
+      context: ../launchers/identity-hub
+    container_name: reed-nordic-ih
+    depends_on:
+      vault-init:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      # its credential watchdog checks revocation status lists at the issuer on start; if the issuer
+      # is not up yet the credentials are moved to ERROR and never recover
+      issuerservice:
+        condition: service_healthy
+    environment:
+      EDC_VAULT_HASHICORP_TOKEN: ${VAULT_TOKEN_NORDIC}
+      EDC_DATASOURCE_DEFAULT_PASSWORD: ${POSTGRES_PASSWORD}
+      EDC_IH_API_SUPERUSER_KEY: ${IH_KEY_NORDIC}
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75
+    mem_limit: 1g
+    volumes:
+      - ./identityhub/nordic.properties:/app/config/config.properties:ro
+    ports: ["127.0.0.1:46081:7081"]   # identity admin API (x-api-key), used by seed-identity.sh
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "http://127.0.0.1:7080/api/check/readiness"]
+      interval: 5s
+      retries: 60
+
   # IdentityHub of Komatsu Mining Germany GmbH
   komatsu-ih:
     image: reed/identityhub:local
@@ -523,6 +586,19 @@ services:
     volumes:
       - ./payloads/nordvind:/data:ro
 
+  # Nordvind's policy decision point: the Rego of its offerings and active contracts, asked by nordvind-data before a payload leaves. Not published to the host.
+  nordvind-opa:
+    image: openpolicyagent/opa:1.22.4-static
+    container_name: reed-nordvind-opa
+    command: ["run", "--server", "--addr=:8181", "--authentication=token", "--authorization=basic",
+              "--log-level=error", "/policy/authz.rego"]
+    environment:
+      OPA_DEPLOY_TOKEN: ${OPA_TOKEN_NORDVIND}
+      OPA_QUERY_TOKEN: ${DATA_KEY_NORDVIND}
+    mem_limit: 96m
+    volumes:
+      - ./opa/authz.rego:/policy/authz.rego:ro
+
   # Hanse Marine & Rail GmbH - OEM (Kiel, DE)
   hanse:
     image: reed/connector:local
@@ -561,6 +637,19 @@ services:
     mem_limit: 128m
     volumes:
       - ./payloads/hanse:/data:ro
+
+  # Hanse's policy decision point: the Rego of its offerings and active contracts, asked by hanse-data before a payload leaves. Not published to the host.
+  hanse-opa:
+    image: openpolicyagent/opa:1.22.4-static
+    container_name: reed-hanse-opa
+    command: ["run", "--server", "--addr=:8181", "--authentication=token", "--authorization=basic",
+              "--log-level=error", "/policy/authz.rego"]
+    environment:
+      OPA_DEPLOY_TOKEN: ${OPA_TOKEN_HANSE}
+      OPA_QUERY_TOKEN: ${DATA_KEY_HANSE}
+    mem_limit: 96m
+    volumes:
+      - ./opa/authz.rego:/policy/authz.rego:ro
 
   # Castellum Fundición S.L. - SUPPLIER (Bilbao, ES)
   castellum:
@@ -601,6 +690,19 @@ services:
     volumes:
       - ./payloads/castellum:/data:ro
 
+  # Castellum's policy decision point: the Rego of its offerings and active contracts, asked by castellum-data before a payload leaves. Not published to the host.
+  castellum-opa:
+    image: openpolicyagent/opa:1.22.4-static
+    container_name: reed-castellum-opa
+    command: ["run", "--server", "--addr=:8181", "--authentication=token", "--authorization=basic",
+              "--log-level=error", "/policy/authz.rego"]
+    environment:
+      OPA_DEPLOY_TOKEN: ${OPA_TOKEN_CASTELLUM}
+      OPA_QUERY_TOKEN: ${DATA_KEY_CASTELLUM}
+    mem_limit: 96m
+    volumes:
+      - ./opa/authz.rego:/policy/authz.rego:ro
+
   # Wisła Precision Machining Sp. z o.o. - SUPPLIER (Gdańsk, PL)
   wisla:
     image: reed/connector:local
@@ -639,6 +741,19 @@ services:
     mem_limit: 128m
     volumes:
       - ./payloads/wisla:/data:ro
+
+  # Wisła's policy decision point: the Rego of its offerings and active contracts, asked by wisla-data before a payload leaves. Not published to the host.
+  wisla-opa:
+    image: openpolicyagent/opa:1.22.4-static
+    container_name: reed-wisla-opa
+    command: ["run", "--server", "--addr=:8181", "--authentication=token", "--authorization=basic",
+              "--log-level=error", "/policy/authz.rego"]
+    environment:
+      OPA_DEPLOY_TOKEN: ${OPA_TOKEN_WISLA}
+      OPA_QUERY_TOKEN: ${DATA_KEY_WISLA}
+    mem_limit: 96m
+    volumes:
+      - ./opa/authz.rego:/policy/authz.rego:ro
 
   # Maasvlakte Heavy Lift B.V. - SERVICE (Rotterdam, NL)
   maasvlakte:
@@ -679,6 +794,19 @@ services:
     volumes:
       - ./payloads/maasvlakte:/data:ro
 
+  # Maasvlakte's policy decision point: the Rego of its offerings and active contracts, asked by maasvlakte-data before a payload leaves. Not published to the host.
+  maasvlakte-opa:
+    image: openpolicyagent/opa:1.22.4-static
+    container_name: reed-maasvlakte-opa
+    command: ["run", "--server", "--addr=:8181", "--authentication=token", "--authorization=basic",
+              "--log-level=error", "/policy/authz.rego"]
+    environment:
+      OPA_DEPLOY_TOKEN: ${OPA_TOKEN_MAASVLAKTE}
+      OPA_QUERY_TOKEN: ${DATA_KEY_MAASVLAKTE}
+    mem_limit: 96m
+    volumes:
+      - ./opa/authz.rego:/policy/authz.rego:ro
+
   # Rhein NDT Prüflabor GmbH - SERVICE (Duisburg, DE)
   rhein-ndt:
     image: reed/connector:local
@@ -717,6 +845,71 @@ services:
     mem_limit: 128m
     volumes:
       - ./payloads/rhein-ndt:/data:ro
+
+  # Rhein NDT's policy decision point: the Rego of its offerings and active contracts, asked by rhein-ndt-data before a payload leaves. Not published to the host.
+  rhein-ndt-opa:
+    image: openpolicyagent/opa:1.22.4-static
+    container_name: reed-rhein-ndt-opa
+    command: ["run", "--server", "--addr=:8181", "--authentication=token", "--authorization=basic",
+              "--log-level=error", "/policy/authz.rego"]
+    environment:
+      OPA_DEPLOY_TOKEN: ${OPA_TOKEN_RHEIN_NDT}
+      OPA_QUERY_TOKEN: ${DATA_KEY_RHEIN_NDT}
+    mem_limit: 96m
+    volumes:
+      - ./opa/authz.rego:/policy/authz.rego:ro
+
+  # Nordic Manufacturing Provider AS - SUPPLIER (Raufoss, NO)
+  nordic:
+    image: reed/connector:local
+    build:
+      context: ../launchers/connector
+    container_name: reed-nordic
+    depends_on:
+      vault-init:
+        condition: service_completed_successfully
+      reed-backend:
+        condition: service_healthy
+      nordic-ih:
+        condition: service_healthy
+    environment:
+      EDC_VAULT_HASHICORP_TOKEN: ${VAULT_TOKEN_NORDIC}
+      EDC_DATASOURCE_DEFAULT_PASSWORD: ${POSTGRES_PASSWORD}
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75
+    mem_limit: 1g
+    volumes:
+      - ./nordic/config.properties:/app/config/config.properties:ro
+    ports: ["127.0.0.1:46193:46193", "127.0.0.1:46291:46291"]   # Management API (key-protected) + public data plane
+
+  # Nordic's own data service: holds its confidential payloads, releases them only to its data
+  # plane, after a REED usage decision, stamped with a licence + watermark. Not published to the host.
+  nordic-data:
+    image: reed/data-service:local
+    build:
+      context: ../services/data-service
+    container_name: reed-nordic-data
+    depends_on:
+      reed-backend:
+        condition: service_healthy
+    environment:
+      COMPANY: nordic
+      DATA_KEY: ${DATA_KEY_NORDIC}
+    mem_limit: 128m
+    volumes:
+      - ./payloads/nordic:/data:ro
+
+  # Nordic's policy decision point: the Rego of its offerings and active contracts, asked by nordic-data before a payload leaves. Not published to the host.
+  nordic-opa:
+    image: openpolicyagent/opa:1.22.4-static
+    container_name: reed-nordic-opa
+    command: ["run", "--server", "--addr=:8181", "--authentication=token", "--authorization=basic",
+              "--log-level=error", "/policy/authz.rego"]
+    environment:
+      OPA_DEPLOY_TOKEN: ${OPA_TOKEN_NORDIC}
+      OPA_QUERY_TOKEN: ${DATA_KEY_NORDIC}
+    mem_limit: 96m
+    volumes:
+      - ./opa/authz.rego:/policy/authz.rego:ro
 
   # Komatsu Mining Germany GmbH - OEM (Düsseldorf, DE)
   komatsu:
@@ -757,6 +950,19 @@ services:
     volumes:
       - ./payloads/komatsu:/data:ro
 
+  # Komatsu's policy decision point: the Rego of its offerings and active contracts, asked by komatsu-data before a payload leaves. Not published to the host.
+  komatsu-opa:
+    image: openpolicyagent/opa:1.22.4-static
+    container_name: reed-komatsu-opa
+    command: ["run", "--server", "--addr=:8181", "--authentication=token", "--authorization=basic",
+              "--log-level=error", "/policy/authz.rego"]
+    environment:
+      OPA_DEPLOY_TOKEN: ${OPA_TOKEN_KOMATSU}
+      OPA_QUERY_TOKEN: ${DATA_KEY_KOMATSU}
+    mem_limit: 96m
+    volumes:
+      - ./opa/authz.rego:/policy/authz.rego:ro
+
   # ---------- Federated Catalog (crawls every connector) ----------
   federated-catalog:
     image: reed/federated-catalog:local
@@ -779,6 +985,8 @@ services:
       maasvlakte:
         condition: service_started
       rhein-ndt:
+        condition: service_started
+      nordic:
         condition: service_started
       komatsu:
         condition: service_started
@@ -808,3 +1016,4 @@ volumes:
   reed-mosquitto-data:
   reed-factory-castellum:
   reed-factory-wisla:
+  reed-factory-nordic:

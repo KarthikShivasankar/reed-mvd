@@ -23,5 +23,9 @@ public enum EventType {
     /** the LLM assistant was used (records redactions, never the prompt). */
     ASSIST,
     /** an owner changed an asset's terms (who may discover it, contract policy) and republished it. */
-    POLICY
+    POLICY,
+    /** the operator onboarded a company or changed its membership or attributes. */
+    ONBOARD,
+    /** a contract moved through its lifecycle, or its policy was deployed to a connector's decision point. */
+    CONTRACT
 }

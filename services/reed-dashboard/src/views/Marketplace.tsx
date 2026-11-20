@@ -19,7 +19,8 @@ export function Marketplace({ ctx }: { ctx: Ctx }) {
   const name = (bpn: string) => parts.data?.find((p) => p.bpn === bpn)?.shortName ?? bpn;
   const canRank = session.has("buyer") || session.has("quality-auditor") || ctx.operator;
 
-  const rows = (rfqs.data ?? []).filter((r) =>
+  // service RFQs (a capability, not a part) have their own view
+  const rows = (rfqs.data ?? []).filter((r) => !r.capability).filter((r) =>
     filter === "all" ? true : filter === "mine" ? r.buyerBpn === session.bpn : r.state === "OPEN");
 
   return (

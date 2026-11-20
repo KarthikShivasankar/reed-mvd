@@ -33,6 +33,46 @@ export const TAB_HELP: Record<string, TabHelp> = {
     ],
     usage: "Buyers describe a part and post the RFQ; REED ranks suppliers immediately. Everyone else can browse what is in demand.",
   },
+  capabilities: {
+    role: "The capability catalogue: manufacturing services, datasets and APIs that providers offer, each with a compound access policy.",
+    contains: [
+      "Every published capability with the resource a contract gives access to (a service, a dataset, an API, machine availability, ...).",
+      "Its policy three ways: the individual components, the effective combination (A AND B AND ...), and the ODRL document with the Rego generated from it.",
+      "For a provider's data steward: register a capability, compose its policy from ten kinds of condition, publish it.",
+    ],
+    usage: "Providers define the policy here (design time). Publishing puts the credential conditions on the provider's connector and the whole policy, as Rego, at the Open Policy Agents.",
+    layer: "design-time policy",
+  },
+  service: {
+    role: "Requests for a manufacturing capability, matched in two separate steps: does the capability fit, and may this buyer have it.",
+    contains: [
+      "A form to request a capability with technical requirements, capacity, region, period and purpose of use.",
+      "Per offering: the capability match (named checks), the policy eligibility (one line per condition, decided by Open Policy Agent) and the final answer.",
+      "The exact condition that failed when a provider is not eligible.",
+    ],
+    usage: "Post a request, read why each provider is or is not eligible, and select an eligible one to draft a contract.",
+    layer: "matchmaking-time policy",
+  },
+  agreements: {
+    role: "Contracts about a capability, each carrying its effective policy and enforced at the provider's own connector.",
+    contains: [
+      "The contract's lifecycle: DRAFT, NEGOTIATING, AGREED, ACTIVE, then EXPIRED or TERMINATED.",
+      "The effective policy: the provider's policy AND this buyer AND this period AND this purpose - as ODRL and as generated Rego.",
+      "The policy lifecycle rail, from the provider's definition to a runtime decision and the exchange.",
+      "Real requests through the connectors, simulated requests, and every decision taken under the contract.",
+    ],
+    usage: "Accept the terms to let the connectors negotiate. Once ACTIVE, request the data: the provider's Open Policy Agent allows or denies it, condition by condition.",
+    layer: "contract-time and runtime policy",
+  },
+  operator: {
+    role: "The data space operator's console: consortium management and the full trail of every policy.",
+    contains: [
+      "Members with the attributes policies are evaluated against, their membership status, and onboarding.",
+      "Registered connectors and each company's policy decision point (Open Policy Agent), with live status.",
+      "Capabilities and their policies, service RFQs with match results, contracts, and the decision log.",
+    ],
+    usage: "Onboard and approve companies, maintain their attributes, and follow a policy from definition to enforcement. REED orchestrates; data and decisions stay with the companies' connectors.",
+  },
   matches: {
     role: "Explainable matchmaking: which suppliers can make this part, why they rank where they do, and who was filtered out.",
     contains: [

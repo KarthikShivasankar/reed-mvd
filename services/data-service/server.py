@@ -6,6 +6,11 @@ asset data address). Before releasing a payload it asks REED for a usage decisio
 (named by the data plane from the verified EDR) must hold a contract agreement for the asset, and
 time-limited licences must not have expired - and fails closed if REED cannot be reached.
 
+For an asset behind a capability offering this service is the policy enforcement point: REED's
+answer carries the request context (the OPA input), the service asks the company's OWN Open Policy
+Agent for the decision, reports it to REED's decision log, and releases the payload only on ALLOW.
+No decision, or no audit entry: no data.
+
 Every released payload carries a `_reedLicense` block: licensee, agreement, expiry, the duties of
 the policy, and an HMAC watermark over payload + licence, so a leaked copy can be attributed to the
 licensee it was issued to and checked against its terms.
@@ -18,6 +23,7 @@ import re
 import ssl
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -25,9 +31,13 @@ from pathlib import Path
 KEY = os.environ["DATA_KEY"]
 COMPANY = os.environ["COMPANY"]
 USAGE_URL = os.environ.get("REED_USAGE_URL", "http://reed-backend:8080/reed/usage/decide")
+REPORT_URL = USAGE_URL.rsplit("/", 1)[0] + "/decisions"  # where OPA decisions are logged
+OPA_URL = os.environ.get("OPA_URL", f"http://{COMPANY}-opa:8181")  # this company's policy decision point
 DATA = Path(os.environ.get("DATA_DIR", "/data"))
 CA = os.environ.get("TLS_CA")  # trust the REED CA for calls to the backend
 ASSET = re.compile(r"[a-z0-9-]{1,120}")
+OPA_PATH = re.compile(r"/v1/data/reed/policy/[a-z0-9_]{1,160}/decision")
+PURPOSE = re.compile(r"[a-z0-9-]{1,64}")
 
 
 def canonical(obj) -> bytes:
@@ -38,11 +48,10 @@ def watermark(payload: dict, licence: dict) -> str:
     return hmac.new(KEY.encode(), canonical({"payload": payload, "licence": licence}), hashlib.sha256).hexdigest()
 
 
-def decide(asset_id: str, consumer: str | None) -> tuple[int, dict]:
-    body = json.dumps({"assetId": asset_id, "consumerDid": consumer}).encode()
-    req = urllib.request.Request(USAGE_URL, data=body, method="POST", headers={
-        "Content-Type": "application/json", "X-Api-Key": KEY, "X-Data-Service": COMPANY})
-    ctx = ssl.create_default_context(cafile=CA) if CA else None
+def post(url: str, body: dict, headers: dict) -> tuple[int, dict]:
+    req = urllib.request.Request(url, data=json.dumps(body).encode(), method="POST",
+                                 headers={"Content-Type": "application/json", **headers})
+    ctx = ssl.create_default_context(cafile=CA) if CA and url.startswith("https") else None
     try:
         with urllib.request.urlopen(req, timeout=10, context=ctx) as res:
             return res.status, json.load(res)
@@ -51,8 +60,39 @@ def decide(asset_id: str, consumer: str | None) -> tuple[int, dict]:
             return e.code, json.load(e)
         except ValueError:
             return e.code, {"reason": e.reason}
-    except OSError as e:  # fail closed: no decision, no data
-        return 503, {"reason": f"usage decision unavailable: {e}"}
+    except (OSError, ValueError) as e:  # fail closed: no decision, no data
+        return 503, {"reason": f"unavailable: {e}"}
+
+
+REED = {"X-Api-Key": KEY, "X-Data-Service": COMPANY}
+
+
+def decide(asset_id: str, consumer: str | None, purpose: str | None = None) -> tuple[int, dict]:
+    return post(USAGE_URL, {"assetId": asset_id, "consumerDid": consumer, "purpose": purpose}, REED)
+
+
+def allowed(result) -> bool:
+    """OPA's answer is an ALLOW only if it says so and lists no failed condition; anything else is a DENY."""
+    return isinstance(result, dict) and result.get("decision") == "ALLOW" and result.get("failed") == [] \
+        and bool(result.get("conditions"))
+
+
+def enforce(asset_id: str, consumer: str | None, purpose: str | None, opa: dict) -> tuple[bool, str]:
+    """Ask this company's own Open Policy Agent, report the decision to REED, return (release?, reason)."""
+    path = opa.get("path", "")
+    if not OPA_PATH.fullmatch(path):
+        return False, "malformed policy reference"
+    status, answer = post(OPA_URL + path, {"input": opa.get("input", {})}, {"Authorization": f"Bearer {KEY}"})
+    result = answer.get("result") if status == 200 else None
+    if not isinstance(result, dict) or "decision" not in result:
+        return False, "policy decision point unavailable"
+    logged, _ = post(REPORT_URL, {"assetId": asset_id, "consumerDid": consumer, "purpose": purpose, "result": result}, REED)
+    if logged != 200:
+        return False, "policy decision could not be recorded"
+    if allowed(result):
+        return True, ""
+    failed = "; ".join(c.get("label", "?") for c in result.get("failed", []) if isinstance(c, dict))
+    return False, f"policy decision DENY: {failed or 'not allowed'}"
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -67,7 +107,7 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def do_GET(self) -> None:  # noqa: N802
-        path = self.path.split("?", 1)[0]
+        path, _, query = self.path.partition("?")
         if path == "/health":
             return self.send(200, {"status": "UP", "company": COMPANY})
         if not path.startswith("/submodels/") or not ASSET.fullmatch(path[len("/submodels/"):]):
@@ -78,9 +118,17 @@ class Handler(BaseHTTPRequestHandler):
         file = DATA / f"{asset_id}.json"
         if not file.is_file():
             return self.send(404, {"reason": "unknown asset"})
-        status, decision = decide(asset_id, self.headers.get("X-Edc-Consumer"))
+        consumer = self.headers.get("X-Edc-Consumer")
+        # the consumer's declared purpose of use (?purpose=...) is the only thing read from its request
+        purpose = urllib.parse.parse_qs(query).get("purpose", [None])[0]
+        purpose = purpose if purpose and PURPOSE.fullmatch(purpose) else None
+        status, decision = decide(asset_id, consumer, purpose)
         if status != 200 or not decision.get("allow"):
             return self.send(403 if status in (200, 403) else 503, {"reason": decision.get("reason", "denied")})
+        if "opa" in decision:  # governed by a capability offering's policy: this company's OPA decides
+            ok, reason = enforce(asset_id, consumer, purpose, decision["opa"])
+            if not ok:
+                return self.send(403, {"reason": reason})
         payload = json.loads(file.read_text())
         if "shopFloor" in decision:  # production status: the company's line right now, from REED's analysis
             payload["shopFloor"] = decision["shopFloor"]

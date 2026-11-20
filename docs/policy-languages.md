@@ -196,6 +196,14 @@ the pilot path runs (Castellum, Maasvlakte and Nordvind share a project, `run-in
 
 ## 7. CEL vs OPA for REED
 
+> **Update: both are in use now** (`docs/policy-enforcement.md`). The connectors still decide
+> catalogue requests and negotiations with CEL over credentials, as recommended below. OPA was added
+> where CEL cannot see: constraints that are not credentials (competitor, purpose, contract period,
+> named buyer), at matchmaking time and at pull time. Each connector company has its own OPA, asked by
+> its data service; no connector extension was needed. Of the gaps in §6 this closes "no purpose
+> constraint" and "agreed terms are not checked" for assets behind a capability offering. The Rego is
+> generated from the ODRL policy, so there is no hand-written second copy of the rules.
+
 | | CEL | OPA / Rego |
 |---|---|---|
 | Already deployed | yes: in every connector (`edc-cel-core`, `edc-cel-api-v5`, `edc-dcp-cel`, `edc-cel-store-sql`) | no |

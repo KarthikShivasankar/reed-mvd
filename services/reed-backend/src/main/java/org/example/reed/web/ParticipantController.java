@@ -32,7 +32,8 @@ public class ParticipantController {
                         boolean illustrative, String country,
                         String city, String vatId, double lat, double lon, boolean portAccess, boolean railAccess,
                         List<String> sectors, String connectorName, String did, String dspUrl,
-                        Set<String> verifiedCerts, CapabilityClaim capability) {
+                        Set<String> verifiedCerts, CapabilityClaim capability, String membershipStatus,
+                        boolean verified, String industry, List<String> competitorClasses) {
     }
 
     public record Me(String username, List<String> roles, Entry organisation) {
@@ -66,6 +67,7 @@ public class ParticipantController {
     private Entry entry(Participant p) {
         return new Entry(p.bpn, p.name, p.shortName, p.role, p.consortium, p.illustrative, p.country, p.city, p.vatId, p.lat, p.lon,
                 p.portAccess, p.railAccess, p.sectors, p.connectorName, p.did, p.dspUrl,
-                credentials.verifiedCerts(p), p.capability);
+                credentials.verifiedCerts(p), p.capability, p.membershipStatus, p.verified, p.industry,
+                p.competitorClasses == null ? List.of() : p.competitorClasses);
     }
 }

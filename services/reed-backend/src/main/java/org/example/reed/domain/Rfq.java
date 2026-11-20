@@ -69,6 +69,25 @@ public class Rfq {
     @JdbcTypeCode(SqlTypes.JSON)
     public List<String> partnerProcesses;
 
+    /** Set on a service RFQ (matched against capability offerings instead of part capabilities). */
+    public String capability;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    public List<String> keywords;
+
+    /** Capacity needed per month, in the provider's unit (machine hours). */
+    public Integer requiredCapacity;
+
+    /** EU, EEA, NORDIC or a country code; null: anywhere. */
+    public String preferredRegion;
+
+    public LocalDate startDate;
+
+    public LocalDate endDate;
+
+    /** What the buyer will use the service and its data for, e.g. pilot-evaluation. */
+    public String purpose;
+
     @jakarta.persistence.Enumerated(jakarta.persistence.EnumType.STRING)
     public State state = State.OPEN;
 
