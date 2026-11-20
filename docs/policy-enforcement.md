@@ -5,7 +5,8 @@ matches buyers against capability **and** policy, a contract freezes the effecti
 translates it to Rego, and the provider's own Open Policy Agent (OPA) allows or denies every request
 at the provider's connector.
 
-Run it: `./run-policy.sh` (exit 0 = all PASS). Look at it: dashboard views **Capabilities**,
+Run it: `./run-policy.sh` (exit 0 = all PASS). Watch it: `node tools/demo-video/policy.mjs && python3 tools/demo-video/mix.py
+tools/demo-video/out-policy` records a narrated six-step video (`out-policy/reed-policy.mp4`, local piper voice). Look at it: dashboard views **Capabilities**,
 **Service RFQs**, **Service contracts**, **Operator**.
 
 The policy exists at four separate moments, and each is a different piece of code:

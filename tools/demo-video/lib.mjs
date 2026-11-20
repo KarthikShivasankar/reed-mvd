@@ -163,7 +163,7 @@ export async function spot(loc, label = "", block = "center") {
   } catch { /* not on screen */ }
 }
 
-const WHO = { "kvarken-engineer": "Kvarken's engineer", "castellum-engineer": "Castellum's engineer (its data manager)", "nordvind-buyer": "Nordvind's buyer",
+const WHO = { "nordic-engineer": "Nordic's engineer (its data manager)", "kvarken-engineer": "Kvarken's engineer", "castellum-engineer": "Castellum's engineer (its data manager)", "nordvind-buyer": "Nordvind's buyer",
   "reed-admin": "the REED operator", "vagant-buyer": "a non-member", "wisla-engineer": "Wisła's engineer (its data manager)",
   "maasvlakte-engineer": "Maasvlakte's engineer", "hanse-buyer": "Hanse's buyer", "rhein-auditor": "Rhein NDT's auditor", "nordvind-quality": "Nordvind's auditor" };
 /** Logs in through Keycloak; shown as a short sped-up moment that says whose screen comes next. */

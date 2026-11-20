@@ -38,7 +38,7 @@ docker compose -f deployment/docker-compose.yml up --build -d    # --profile vll
 ./run-factory.sh                   # shop floor: MQTT auth/ACL, live stream, history, observations, briefing, scoping, fault -> alarm
 ./run-policy.sh                    # capability vs policy match, contract, ODRL -> Rego -> each company's OPA: ALLOW + DENY cases
 ./run-interop.sh                   # every connector x every other: catalogues + contracts match PolicyEvaluator; 8 stories (SCENARIO=X2)
-node tools/demo-video/walkthrough.mjs   # narrated videos (also tutorial.mjs; fresh seeded stack, piper TTS via PIPER_PY/PIPER_VOICE), then mix.py + review.py <out dir>
+node tools/demo-video/walkthrough.mjs   # narrated videos (also tutorial.mjs, policy.mjs = the six policy steps, no reseed needed; fresh seeded stack, piper TTS via PIPER_PY/PIPER_VOICE), then mix.py + review.py <out dir>
 ./gradlew :services:reed-backend:test                          # scorer, fixtures, assistant guardrails
 cd services/reed-dashboard && npx playwright test              # UI e2e (stack must be up + seeded)
 docker compose -f deployment/docker-compose.yml down -v        # -v drops Vault + Postgres (seed again)
